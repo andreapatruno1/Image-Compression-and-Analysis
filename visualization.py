@@ -170,4 +170,4 @@ def plot_tilt_correction(
     if save:
         plt.savefig(os.path.join(OUTPUT_DIR, 'fase2_correzione_tilt.png'),
                     dpi=150, bbox_inches='tight')
-    plt.show()
+    plt.close()

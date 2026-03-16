@@ -67,7 +67,7 @@ def load_sample_images(split: str = SPLIT) -> dict[str, np.ndarray]:
             img = Image.open(os.path.join(folder, f)).convert('L')
             arr = np.array(img)
             if not is_lateral_xray(arr):
-                valid, _ = is_valid_image(arr)
+                valid, _ = is_valid_image(arr, filename=f)
                 if valid:
                     samples[cls] = arr
                     break
@@ -220,7 +220,13 @@ def correct_tilt(image: np.ndarray, angle: float = None) -> tuple[np.ndarray, fl
     return corrected, angle
 
 
-def is_valid_image(image: np.ndarray, max_tilt: float = MAX_TILT_ANGLE) -> tuple[bool, float]:
+# Immagini note per avere padding rotazionale grave e angoli finti che ingannano gli algoritmi
+KNOWN_CORRUPT_FILES = {
+    "1018.jpg", "1023.jpg", "1030.jpg", "1048.jpg", "1057.jpg", "1066.jpg",
+    "1078.jpg", "1099.jpg", "1100.jpg", "1132.jpg", "1133.jpg", "145.jpg"
+}
+
+def is_valid_image(image: np.ndarray, max_tilt: float = MAX_TILT_ANGLE, filename: str = None) -> tuple[bool, float]:
     """
     Verifica se un'immagine e' valida (non troppo inclinata e non corrotta da padding).
 
@@ -229,6 +235,9 @@ def is_valid_image(image: np.ndarray, max_tilt: float = MAX_TILT_ANGLE) -> tuple
     valid : bool
     angle : float -- angolo rilevato
     """
+    if filename and filename in KNOWN_CORRUPT_FILES:
+        return False, 99.0
+        
     # 1. Controllo padding artificiale (angoli molto chiari = immagine ruotata e riempita)
     # Calcoliamo la media su blocchi 20x20 agli angoli
     if image.max() <= 1.0:
@@ -345,7 +354,7 @@ def load_dataset(
 
             # Controlla se l'immagine è valida (padding corrotto o inclinazione eccesiva)
             if apply_tilt_correction:
-                valid, angle = is_valid_image(raw_arr, max_tilt)
+                valid, angle = is_valid_image(raw_arr, max_tilt, filename=f)
                 if not valid:
                     skipped_tilt += 1
                     continue

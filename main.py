@@ -11,6 +11,8 @@ Esegue in sequenza tutte le 5 fasi dell'analisi:
 Uso:
     python main.py
 """
+import matplotlib
+matplotlib.use('Agg')
 
 from config import setup_plot_style
 from data_loader import (count_images, print_image_counts,
