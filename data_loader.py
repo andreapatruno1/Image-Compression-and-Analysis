@@ -52,7 +52,8 @@ def print_image_counts(counts: dict) -> None:
 
 def load_sample_images(split: str = SPLIT) -> dict[str, np.ndarray]:
     """
-    Carica la prima immagine grezza (uint8) per ciascuna classe.
+    Carica la prima immagine grezza (uint8) per ciascuna classe,
+    escludendo le radiografie laterali.
 
     Returns
     -------
@@ -62,8 +63,12 @@ def load_sample_images(split: str = SPLIT) -> dict[str, np.ndarray]:
     for cls in CLASSES:
         folder = os.path.join(DATASET_DIR, split, cls)
         files = _image_files(folder)
-        img = Image.open(os.path.join(folder, files[0])).convert('L')
-        samples[cls] = np.array(img)
+        for f in files:
+            img = Image.open(os.path.join(folder, f)).convert('L')
+            arr = np.array(img)
+            if not is_lateral_xray(arr):
+                samples[cls] = arr
+                break
     return samples
 
 
@@ -81,6 +86,43 @@ def print_sample_properties(sample_images: dict[str, np.ndarray]) -> None:
         print(f"    Media:  {arr.mean():.2f}")
         print(f"    Std:    {arr.std():.2f}")
         print(f"    2D?     {'Si [OK]' if arr.ndim == 2 else 'No [!!] -- ATTENZIONE'}")
+
+
+# ===========================================================================
+#  RILEVAMENTO IMMAGINI LATERALI
+# ===========================================================================
+
+def is_lateral_xray(image: np.ndarray) -> bool:
+    """
+    Rileva se un'immagine è una radiografia laterale (profilo) anziché PA.
+
+    Le radiografie laterali mostrano un corpo stretto con grandi bande nere
+    ai lati. Si verifica se la distribuzione del segnale lungo le colonne
+    è molto concentrata al centro rispetto alla larghezza totale.
+
+    Parameters
+    ----------
+    image : np.ndarray  (2D, qualsiasi range)
+
+    Returns
+    -------
+    bool : True se l'immagine appare laterale
+    """
+    if image.max() <= 1.0:
+        img = (image * 255).astype(np.uint8)
+    else:
+        img = image.astype(np.uint8)
+
+    # Proiezione media lungo le righe → profilo orizzontale
+    col_profile = img.mean(axis=0)
+    threshold = col_profile.max() * 0.3
+
+    # Conta le colonne con segnale significativo
+    active_cols = np.sum(col_profile > threshold)
+    ratio = active_cols / len(col_profile)
+
+    # Se meno del 60% delle colonne ha segnale → laterale
+    return ratio < 0.60
 
 
 # ===========================================================================
@@ -252,19 +294,29 @@ def load_dataset(
         folder = os.path.join(DATASET_DIR, split, cls)
         files = _image_files(folder)
         class_imgs = []
-        skipped = 0
+        skipped_tilt = 0
+        skipped_lateral = 0
 
         for f in files:
             if len(class_imgs) >= max_per_class:
                 break
 
+            filepath = os.path.join(folder, f)
+
+            # Controlla se è una radiografia laterale (prima del preprocessing)
+            raw = Image.open(filepath).convert('L')
+            raw_arr = np.array(raw)
+            if is_lateral_xray(raw_arr):
+                skipped_lateral += 1
+                continue
+
             img, angle = load_and_preprocess(
-                os.path.join(folder, f), target_size, apply_tilt_correction
+                filepath, target_size, apply_tilt_correction
             )
 
             # Scarta immagini troppo inclinate
             if apply_tilt_correction and abs(angle) > max_tilt:
-                skipped += 1
+                skipped_tilt += 1
                 continue
 
             class_imgs.append(img)
@@ -273,8 +325,10 @@ def load_dataset(
 
         images_by_class[cls] = np.array(class_imgs)
         msg = f"  Caricate {len(class_imgs):3d} immagini per '{cls}'"
-        if skipped > 0:
-            msg += f"  (scartate {skipped} con tilt > {max_tilt} gradi)"
+        if skipped_tilt > 0:
+            msg += f"  (scartate {skipped_tilt} con tilt > {max_tilt}°)"
+        if skipped_lateral > 0:
+            msg += f"  (scartate {skipped_lateral} laterali)"
         print(msg)
 
     all_images = np.array(all_images)
@@ -283,3 +337,38 @@ def load_dataset(
           f"{all_images.shape[1]}x{all_images.shape[2]} pixel")
 
     return images_by_class, all_images, labels
+
+
+def load_raw_samples(
+    split: str = SPLIT,
+    n_samples: int = 3
+) -> dict[str, list[tuple[np.ndarray, str]]]:
+    """
+    Carica immagini RAW (solo resize, SENZA correzione tilt) per il confronto
+    "prima vs dopo". Filtra le immagini laterali.
+
+    Returns
+    -------
+    dict : {classe: [(img_raw_resized, filename), ...]}
+    """
+    raw_by_class = {}
+    for cls in CLASSES:
+        folder = os.path.join(DATASET_DIR, split, cls)
+        files = _image_files(folder)
+        samples = []
+        for f in files:
+            if len(samples) >= n_samples:
+                break
+            filepath = os.path.join(folder, f)
+            raw = Image.open(filepath).convert('L')
+            raw_arr = np.array(raw)
+            # Salta le laterali
+            if is_lateral_xray(raw_arr):
+                continue
+            # Resize senza correzione tilt
+            img = raw.resize(TARGET_SIZE, Image.LANCZOS)
+            arr = np.array(img, dtype=np.float64) / 255.0
+            samples.append((arr, f))
+        raw_by_class[cls] = samples
+    return raw_by_class
+

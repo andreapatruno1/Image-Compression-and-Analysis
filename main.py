@@ -15,7 +15,7 @@ Uso:
 from config import setup_plot_style
 from data_loader import (count_images, print_image_counts,
                          load_sample_images, print_sample_properties,
-                         load_and_preprocess, load_dataset)
+                         load_and_preprocess, load_dataset, load_raw_samples)
 from svd_engine import apply_svd, print_svd_info
 from visualization import (plot_exploration, plot_svd_reconstruction,
                            plot_class_comparison, plot_tilt_correction)
@@ -50,7 +50,10 @@ def main():
     print("#" * 60)
 
     images_by_class, all_images, labels = load_dataset()
-    plot_tilt_correction(images_by_class)
+
+    # Carica immagini raw (senza tilt correction) per il confronto vero
+    raw_samples = load_raw_samples()
+    plot_tilt_correction(raw_samples)
 
     # ==================================================================
     #  FASE 3 -- SVD

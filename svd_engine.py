@@ -59,11 +59,14 @@ def reconstruct_svd(U: np.ndarray, S: np.ndarray, Vt: np.ndarray, k: int) -> np.
 
 def compression_ratio(m: int, n: int, k: int) -> float:
     """
-    Rapporto di compressione: dati memorizzati / dati originali.
+    Rapporto di compressione: percentuale di dati memorizzati rispetto all'originale.
 
     Con k componenti servono k*(m + n + 1) valori anziché m*n.
+    Il rapporto è clampato a [0, 1] (max 100%).
     """
-    return k * (m + n + 1) / (m * n)
+    stored = k * (m + n + 1)
+    original = m * n
+    return min(1.0, stored / original)
 
 
 # ─── Metriche di qualità ──────────────────────────────────────────────────────

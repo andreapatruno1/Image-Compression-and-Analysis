@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from config import CLASSES, CLASS_COLORS, OUTPUT_DIR, K_VALUES_DEMO, K_VALUES_COMPARE, TARGET_SIZE
 from svd_engine import apply_svd, reconstruct_svd, compression_ratio, mse, psnr
-from data_loader import detect_tilt_angle, correct_tilt
+from data_loader import detect_tilt_angle, correct_tilt, is_lateral_xray
 
 
 def plot_exploration(sample_images: dict[str, np.ndarray], save: bool = True) -> None:
@@ -128,35 +128,40 @@ def plot_class_comparison(
 
 
 def plot_tilt_correction(
-    images_by_class: dict[str, np.ndarray],
-    n_samples: int = 3,
+    raw_samples: dict[str, list[tuple[np.ndarray, str]]],
     save: bool = True
 ) -> None:
     """
-    Mostra il prima/dopo della correzione dell'inclinazione per alcune immagini.
+    Mostra il prima/dopo della correzione dell'inclinazione.
+    Riceve immagini RAW (senza correzione tilt applicata) per mostrare il
+    vero confronto.
     """
-    fig, axes = plt.subplots(len(CLASSES), n_samples * 2, figsize=(4 * n_samples * 2, 4 * len(CLASSES)))
+    n_samples = max(len(v) for v in raw_samples.values())
+    fig, axes = plt.subplots(len(CLASSES), n_samples * 2,
+                             figsize=(4 * n_samples * 2, 4 * len(CLASSES)))
 
     for row, cls in enumerate(CLASSES):
-        imgs = images_by_class[cls]
-        for col in range(min(n_samples, len(imgs))):
-            original = imgs[col]
-            angle = detect_tilt_angle(original)
-            corrected, applied_angle = correct_tilt(original.copy(), angle)
+        samples = raw_samples[cls]
+        for col in range(min(n_samples, len(samples))):
+            raw_img, fname = samples[col]
+
+            # Rileva l'angolo sull'immagine raw
+            angle = detect_tilt_angle(raw_img)
+            corrected, applied_angle = correct_tilt(raw_img.copy(), angle)
             corrected = np.clip(corrected, 0, 1)
 
-            # Prima
+            # Prima (raw)
             ax_before = axes[row, col * 2]
-            ax_before.imshow(original, cmap='gray', vmin=0, vmax=1)
-            ax_before.set_title(f'Prima\nAngolo: {angle:.1f} gradi', fontweight='bold', fontsize=10)
+            ax_before.imshow(raw_img, cmap='gray', vmin=0, vmax=1)
+            ax_before.set_title(f'Prima\nAngolo: {angle:.1f}°', fontweight='bold', fontsize=10)
             ax_before.axis('off')
             if col == 0:
                 ax_before.set_ylabel(cls, fontsize=12, fontweight='bold', rotation=90, labelpad=15)
 
-            # Dopo
+            # Dopo (corretto)
             ax_after = axes[row, col * 2 + 1]
             ax_after.imshow(corrected, cmap='gray', vmin=0, vmax=1)
-            ax_after.set_title(f'Dopo\nCorretto: {applied_angle:.1f} gradi', fontweight='bold', fontsize=10)
+            ax_after.set_title(f'Dopo\nCorretto: {applied_angle:.1f}°', fontweight='bold', fontsize=10)
             ax_after.axis('off')
 
     plt.suptitle('Correzione Inclinazione -- Prima vs Dopo',

@@ -13,15 +13,9 @@ import seaborn as sns
 warnings.filterwarnings('ignore')
 
 # ─── Percorsi ─────────────────────────────────────────────────────────────────
-DATASET_DIR = os.path.join(
-    r"C:\Users\1\OneDrive - Politecnico di Bari\POLIBA\1 anno\1 semestre",
-    "statistical metods", "progetto", "LungXRays-grayscale"
-)
-
-PROJECT_DIR = os.path.join(
-    r"C:\Users\1\OneDrive - Politecnico di Bari\POLIBA\1 anno\1 semestre",
-    "statistical metods", "progetto", "Medical Image Compression and Analysis"
-)
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(PROJECT_DIR)
+DATASET_DIR = os.path.join(BASE_DIR, "LungXRays-grayscale")
 
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
