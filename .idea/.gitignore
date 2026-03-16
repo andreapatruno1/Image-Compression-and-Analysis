@@ -6,3 +6,17 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+
+# --- Specifici per il progetto SVD/PCA ---
+# Nascondi il dataset compresso (Cache)
+data/processed_dataset.npz
+
+# Nascondi i risultati delle analisi (Grafici e tabelle)
+output/
+
+# --- Python standard ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
