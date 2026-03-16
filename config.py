@@ -13,10 +13,13 @@ import seaborn as sns
 warnings.filterwarnings('ignore')
 
 # ─── Percorsi ─────────────────────────────────────────────────────────────────
+# Recupera il percorso della cartella principale del progetto (dove si trova questo file)
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.dirname(PROJECT_DIR)
-DATASET_DIR = os.path.join(BASE_DIR, "LungXRays-grayscale")
 
+# Punta alla cartella 'raw' dentro 'data'
+DATASET_DIR = os.path.join(PROJECT_DIR, "data", "raw")
+
+# Cartella per i grafici e i risultati
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -25,7 +28,7 @@ CLASSES = ["Corona Virus Disease", "Normal", "Pneumonia", "Tuberculosis"]
 
 # --- Parametri immagine --------------------------------------------------------
 TARGET_SIZE = (256, 256)                # dimensione di ridimensionamento
-SPLIT = "train"                         # split di default da utilizzare
+SPLIT = ""                              # Lasciato vuoto perché le classi sono direttamente in 'raw'
 MAX_PER_CLASS = 80                      # immagini per classe da caricare
 CORRECT_TILT = True                     # abilita correzione inclinazione
 MAX_TILT_ANGLE = 10                     # angolo massimo (gradi) oltre il quale l'immagine viene scartata

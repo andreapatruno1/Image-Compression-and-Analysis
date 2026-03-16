@@ -17,12 +17,12 @@ matplotlib.use('Agg')
 from config import setup_plot_style
 from data_loader import (count_images, print_image_counts,
                          load_sample_images, print_sample_properties,
-                         load_and_preprocess, load_dataset, load_raw_samples)
+                         load_dataset, load_raw_samples)
 from svd_engine import apply_svd, print_svd_info
 from visualization import (plot_exploration, plot_svd_reconstruction,
                            plot_class_comparison, plot_tilt_correction)
-from analysis import (plot_scree, plot_mse_psnr, run_pca, plot_pca_scatter,
-                      plot_eigenfaces, print_summary_table)
+from src.analysis import (plot_scree, plot_mse_psnr, run_pca, plot_pca_scatter,
+                          plot_eigenfaces, print_summary_table)
 
 
 def main():
