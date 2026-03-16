@@ -28,7 +28,7 @@ TARGET_SIZE = (256, 256)                # dimensione di ridimensionamento
 SPLIT = "train"                         # split di default da utilizzare
 MAX_PER_CLASS = 80                      # immagini per classe da caricare
 CORRECT_TILT = True                     # abilita correzione inclinazione
-MAX_TILT_ANGLE = 15                     # angolo massimo (gradi) oltre il quale l'immagine viene scartata
+MAX_TILT_ANGLE = 10                     # angolo massimo (gradi) oltre il quale l'immagine viene scartata
 
 # ─── Parametri SVD ────────────────────────────────────────────────────────────
 K_VALUES_DEMO = [1, 5, 10, 20, 50, 100, 200]       # k per la griglia di ricostruzione

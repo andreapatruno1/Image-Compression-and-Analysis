@@ -64,18 +64,32 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_mse_psnr(images_by_class: dict[str, np.ndarray], save: bool = True) -> None:
-    """Grafici MSE e PSNR in funzione del numero di componenti k."""
+    """Grafici MSE e PSNR in funzione del numero di componenti k.
+
+    Ottimizzazione: il MSE viene calcolato direttamente dai valori singolari
+    senza ricostruire l'immagine. Dalla teoria SVD:
+        MSE(k) = sum(σ_i² per i > k) / (m × n)
+    Questo è matematicamente equivalente ma evita 200 moltiplicazioni matriciali.
+    """
     k_range = np.array(list(K_RANGE_METRICS))
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
     for i, cls in enumerate(CLASSES):
         img = images_by_class[cls][0]
-        U, S, Vt = apply_svd(img)
-        mse_vals, psnr_vals = [], []
-        for k in k_range:
-            recon = np.clip(reconstruct_svd(U, S, Vt, k), 0, 1)
-            mse_vals.append(mse(img, recon))
-            psnr_vals.append(psnr(img, recon))
+        m, n = img.shape
+        _, S, _ = apply_svd(img)
+
+        # Calcolo vettorizzato: MSE(k) = sum(S[k:]²) / (m*n)
+        S_sq = S ** 2
+        total_energy = np.sum(S_sq)
+        cumsum_S_sq = np.cumsum(S_sq)
+        # Per ogni k, l'energia residua è total - cumsum fino a k
+        mse_vals = (total_energy - cumsum_S_sq[k_range - 1]) / (m * n)
+        psnr_vals = np.where(
+            mse_vals == 0,
+            np.inf,
+            10 * np.log10(1.0 / mse_vals)
+        )
 
         axes[0].plot(k_range, mse_vals, label=cls, color=CLASS_COLORS[i], linewidth=2)
         axes[1].plot(k_range, psnr_vals, label=cls, color=CLASS_COLORS[i], linewidth=2)

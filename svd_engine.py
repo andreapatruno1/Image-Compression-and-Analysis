@@ -54,7 +54,7 @@ def reconstruct_svd(U: np.ndarray, S: np.ndarray, Vt: np.ndarray, k: int) -> np.
     -------
     np.ndarray : immagine ricostruita (m × n)
     """
-    return U[:, :k] @ np.diag(S[:k]) @ Vt[:k, :]
+    return (U[:, :k] * S[:k]) @ Vt[:k, :]
 
 
 def compression_ratio(m: int, n: int, k: int) -> float:
@@ -108,7 +108,7 @@ def print_svd_info(image: np.ndarray, U: np.ndarray, S: np.ndarray, Vt: np.ndarr
     """Stampa informazioni sulla decomposizione SVD."""
     m, n = image.shape
     print(f"Immagine originale:  {m} × {n} = {m*n:,} valori")
-    print(f"Valori singolari:    {len(S)} (min rank(m,n))")
+    print(f"Valori singolari:    {len(S)} = min(m, n)")
     print(f"\nMatrice U:   {U.shape}")
     print(f"Vettore S:   {S.shape}")
     print(f"Matrice Vt:  {Vt.shape}")
