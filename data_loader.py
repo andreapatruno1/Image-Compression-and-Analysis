@@ -1,4 +1,4 @@
-"""
+f"""
 data_loader.py -- Fase 1 & 2: Esplorazione e Pre-elaborazione dei Dati.
 
 Funzioni per caricare, verificare e pre-elaborare le immagini radiografiche.
@@ -26,17 +26,21 @@ def _image_files(folder: str) -> list[str]:
 
 def count_images() -> dict:
     """
-    Conta le immagini per classe nel training set.
-
-    Returns
-    -------
-    dict : {classe: n_immagini}
+    Conta le immagini per classe nel dataset.
     """
     counts = {}
     for cls in CLASSES:
-        folder = os.path.join(DATASET_DIR, "train", cls)
-        counts[cls] = len(_image_files(folder))
-    return {"train": counts}
+        # Usiamo SPLIT (che è "") invece di "train" fisso
+        folder = os.path.join(DATASET_DIR, SPLIT, cls)
+
+        # Aggiungiamo un controllo per evitare errori se la cartella non esiste
+        if os.path.exists(folder):
+            counts[cls] = len(_image_files(folder))
+        else:
+            print(f"Attenzione: Cartella non trovata -> {folder}")
+            counts[cls] = 0
+
+    return {"dataset": counts}
 
 
 def print_image_counts(counts: dict) -> None:
@@ -271,7 +275,8 @@ def load_and_preprocess(
     path: str,
     target_size: tuple = TARGET_SIZE,
     apply_tilt_correction: bool = CORRECT_TILT,
-    pil_image: Image.Image = None
+    pil_image: Image.Image = None,
+    angle: float = None
 ) -> tuple[np.ndarray, float]:
     """
     Carica un'immagine, la converte in scala di grigi, corregge l'inclinazione
@@ -287,6 +292,8 @@ def load_and_preprocess(
         Se True, rileva e corregge l'inclinazione.
     pil_image : PIL.Image, optional
         Immagine gia' caricata (evita di riaprire il file).
+    angle : float, optional
+        Angolo di inclinazione pre-calcolato per evitare doppi calcoli.
 
     Returns
     -------
@@ -300,10 +307,11 @@ def load_and_preprocess(
     img = img.resize(target_size, Image.LANCZOS)
     arr = np.array(img, dtype=np.float64) / 255.0
 
-    angle = 0.0
     if apply_tilt_correction:
-        arr, angle = correct_tilt(arr)
+        arr, angle = correct_tilt(arr, angle=angle)
         arr = np.clip(arr, 0, 1)
+    else:
+        angle = 0.0
 
     return arr, angle
 
@@ -365,7 +373,7 @@ def load_dataset(
             # Passiamo anche l'angolo calcolato per non ricalcolarlo
             img, _ = load_and_preprocess(
                 filepath, target_size, apply_tilt_correction,
-                pil_image=raw
+                pil_image=raw, angle=angle
             )
 
             class_imgs.append(img)
