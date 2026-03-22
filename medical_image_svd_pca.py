@@ -103,6 +103,8 @@ plot_class_comparison(images_by_class)
 # La varianza spiegata dalla $i$-esima componente e' proporzionale a $\sigma_i^2$.
 # La **varianza cumulativa** ci dice quante componenti servono per catturare una certa
 # percentuale dell'informazione.
+# Il grafico a destra è in scala logaritmica, per espandere visivamente le
+# differenze tra le classi nella coda dei valori singolari
 
 # %%
 # === SCREE PLOT ===

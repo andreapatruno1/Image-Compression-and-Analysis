@@ -109,7 +109,12 @@ def plot_class_comparison(
         axes[row, 0].set_title('Originale', fontweight='bold')
         axes[row, 0].set_ylabel(cls, fontsize=13, fontweight='bold',
                                 rotation=90, labelpad=15)
-        axes[row, 0].axis('off')
+        # Non usare axis('off') perché nasconde anche la ylabel.
+        # Rimuoviamo solo i tick e le spine per mantenere il nome della classe.
+        axes[row, 0].set_xticks([])
+        axes[row, 0].set_yticks([])
+        for spine in axes[row, 0].spines.values():
+            spine.set_visible(False)
 
         for col, k in enumerate(k_values):
             recon = np.clip(reconstruct_svd(U, S, Vt, k), 0, 1)

@@ -41,6 +41,7 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
 
     axes[0].axhline(y=0.90, color='gray', linestyle='--', alpha=0.6, label='90%')
     axes[0].axhline(y=0.95, color='gray', linestyle=':', alpha=0.6, label='95%')
+    axes[0].axhline(y=0.99, color='gray', linestyle='-.', alpha=0.6, label='99%')
     axes[0].set_xlabel('Numero di componenti (k)')
     axes[0].set_ylabel('Varianza cumulativa spiegata')
     axes[0].set_title('Scree Plot — Varianza Cumulativa', fontweight='bold')
@@ -50,6 +51,7 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
     axes[1].set_xlabel('Indice i')
     axes[1].set_ylabel('Valore singolare S(i)')
     axes[1].set_title('Decadimento dei Valori Singolari (primi 50)', fontweight='bold')
+    axes[1].set_yscale('log')
     axes[1].legend(fontsize=10)
 
     plt.tight_layout()

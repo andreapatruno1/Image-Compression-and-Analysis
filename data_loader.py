@@ -137,7 +137,8 @@ def is_lateral_xray(image: np.ndarray) -> bool:
 #  CORREZIONE INCLINAZIONE (TILT)
 # ===========================================================================
 
-def detect_tilt_angle(image: np.ndarray, search_range: float = 25.0) -> float:
+def detect_tilt_angle(image: np.ndarray, search_range: float = 25.0,
+                      _max_detect_size: int = 128) -> float:
     """
     Rileva l'angolo di inclinazione di una radiografia usando la massimizzazione
     della varianza della proiezione orizzontale.
@@ -150,6 +151,8 @@ def detect_tilt_angle(image: np.ndarray, search_range: float = 25.0) -> float:
     L'angolo che massimizza tale nitidezza è l'inclinazione rilevata.
 
     Utilizza una ricerca a due passaggi (coarse → fine) per efficienza.
+    Per velocizzare il calcolo, l'immagine viene prima ridimensionata a una
+    risoluzione ridotta (_max_detect_size) prima delle rotazioni di ricerca.
 
     Parameters
     ----------
@@ -157,6 +160,9 @@ def detect_tilt_angle(image: np.ndarray, search_range: float = 25.0) -> float:
         Immagine in scala di grigi (2D), valori in [0, 255] o [0, 1].
     search_range : float
         Range di ricerca in gradi (±search_range).
+    _max_detect_size : int
+        Dimensione massima (lato più lungo) dell'immagine usata internamente
+        per la rilevazione dell'angolo. Valori più bassi = più veloce.
 
     Returns
     -------
@@ -167,6 +173,17 @@ def detect_tilt_angle(image: np.ndarray, search_range: float = 25.0) -> float:
         img = image.astype(np.float64) / 255.0
     else:
         img = image.astype(np.float64)
+
+    # --- Downscale per velocizzare la ricerca dell'angolo ---
+    h, w = img.shape
+    max_dim = max(h, w)
+    if max_dim > _max_detect_size:
+        scale = _max_detect_size / max_dim
+        new_h, new_w = int(h * scale), int(w * scale)
+        # Usa PIL per un resize veloce e di qualità
+        img_pil = Image.fromarray((img * 255).astype(np.uint8))
+        img_pil = img_pil.resize((new_w, new_h), Image.LANCZOS)
+        img = np.array(img_pil, dtype=np.float64) / 255.0
 
     def _projection_score(img_arr: np.ndarray, angle: float) -> float:
         """Calcola lo score di allineamento per un dato angolo candidato."""
