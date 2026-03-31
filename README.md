@@ -52,8 +52,6 @@ Il dataset contiene radiografie toraciche in scala di grigi suddivise in **4 cla
 | **Pneumonia** | Polmonite batterica/virale | 186 | ≤ 80 |
 | **Tuberculosis** | Tubercolosi polmonare | 333 | ≤ 80 |
 
-> ⚠️ **Dataset sbilanciato.** Le classi hanno dimensioni molto diverse: Normal ha circa 4× più immagini di COVID-19. Nell'analisi PCA questo può sbilanciare la struttura dei componenti principali verso i pattern della classe più numerosa. Le conclusioni comparative vanno interpretate con questa limitazione in mente.
-
 ### Caratteristiche delle immagini grezze
 
 Le immagini originali hanno dimensioni eterogenee:
@@ -65,7 +63,6 @@ Le immagini originali hanno dimensioni eterogenee:
 | Pneumonia | 1216 × 1512 px | 0–255 | 77.16 | 41.98 |
 | Tuberculosis | 512 × 512 px | 0–193 | 126.62 | 39.60 |
 
-> ⚠️ **Eterogeneità delle risoluzioni.** Le immagini di Normal e Pneumonia hanno risoluzioni molto più alte di COVID-19. Il ridimensionamento uniforme a 256 × 256 px introduce un diverso grado di interpolazione per classe, che può influenzare le metriche di compressione.
 
 ### Osservazioni diagnostiche dagli istogrammi (Fase 1)
 
@@ -130,8 +127,6 @@ Per $m = n = 256$: con $k = 20$, compression ratio ≈ **15.7%**.
 |---|---|---|
 | **MSE** | $\frac{1}{mn}\sum_{i,j}(A_{ij} - \hat{A}_{ij})^2$ | Più basso = meglio |
 | **PSNR** | $10 \log_{10}\!\left(\frac{1}{\text{MSE}}\right)$ [dB] | **> 30 dB** considerato accettabile diagnosticamente |
-
-> **Nota:** MSE basso non garantisce automaticamente qualità diagnostica. Le metriche pixel-wise non catturano la salienza clinica delle strutture (es. un bordo polmonare sfumato può avere MSE basso ma essere irriconoscibile al radiologo). Sono tuttavia lo standard ingegneristico per valutare la fedeltà della compressione.
 
 ---
 
@@ -456,15 +451,3 @@ Medical Image Compression and Analysis/
 | **PCA mostra separabilità parziale tra classi** | COVID-19/TB vs Normal/Pneumonia si separano su PC1; sovrapposizione residua |
 | **Il pre-processing è critico** | Senza correzione tilt e filtraggio, i risultati PCA sarebbero degradati |
 
-**Risposta alle domande di ricerca:**
-
-1. ✅ *È possibile comprimere rx polmonari senza perdita diagnostica?*  
-   **Sì.** La SVD con $k = 20$–50 componenti raggiunge qualità accettabile (PSNR > 30–40 dB) usando il 15–39% dello spazio originale. Il Teorema di Eckart-Young garantisce che questa è la soluzione matematicamente ottimale.
-
-2. ⚠️ *Le tecniche distinguono automaticamente le patologie?*  
-   **Parzialmente.** La PCA separa i gruppi COVID-19/Tuberculosis da Normal/Pneumonia, ma la sovrapposizione residua richiede classificatori supervisionati per una diagnosi affidabile.  
-   Il contributo principale di SVD/PCA è **esplorativo**: rivelano strutture latenti nei dati e supportano la visualizzazione, non sostituiscono la diagnosi clinica.
-
----
-
-*Documentazione generata da: `ANALISI_PROGETTO.md`, `config.py`, `data_loader.py`, `svd_engine.py`, `src/analysis.py`*
