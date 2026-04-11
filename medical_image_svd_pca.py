@@ -18,12 +18,16 @@
 from config import setup_plot_style
 from data_loader import (count_images, print_image_counts,
                          load_sample_images, print_sample_properties,
-                         load_dataset)
+                         load_dataset, load_raw_samples)
 from svd_engine import apply_svd, print_svd_info
 from visualization import (plot_exploration, plot_svd_reconstruction,
-                           plot_class_comparison)
+                           plot_class_comparison, plot_tilt_correction)
 from src.analysis import (plot_scree, plot_mse_psnr, run_pca, plot_pca_scatter,
                           plot_eigenfaces, print_summary_table)
+from src.classification import (prepare_feature_sets, run_classification,
+                                plot_confusion_matrix, plot_roc_curves,
+                                plot_classification_comparison,
+                                plot_hero_tradeoff)
 
 setup_plot_style()
 
@@ -50,11 +54,17 @@ plot_exploration(sample_images)
 # %% [markdown]
 # ---
 # ## Fase 2 -- Pre-elaborazione
-# Ridimensioniamo tutte le immagini a 256x256 e le normalizziamo in [0, 1].
+# Ridimensioniamo tutte le immagini a 256x256, le normalizziamo in [0, 1] e correggiamo
+# l'eventuale inclinazione (tilt) delle radiografie.
 
 # %%
 # === CARICAMENTO BATCH PRE-ELABORATO ===
 images_by_class, all_images, labels = load_dataset()
+
+# %%
+# === CORREZIONE TILT: PRIMA vs DOPO ===
+raw_samples = load_raw_samples()
+plot_tilt_correction(raw_samples)
 
 # %% [markdown]
 # ---
@@ -138,6 +148,69 @@ print_summary_table(demo_img, class_name="Normal")
 
 # %% [markdown]
 # ---
+# ## Fase 6 -- Classificazione e Confronto Feature
+#
+# Per validare quantitativamente l'effetto della compressione/riduzione sulla capacita'
+# diagnostica, addestriamo un classificatore **KNN (k=5)** su diverse rappresentazioni
+# delle stesse immagini, organizzate in **due strategie distinte**:
+#
+# ### Strategia 1: SVD -- Compressione dell'immagine
+# Si applica la SVD troncata **a ogni singola immagine** per comprimerla, poi si
+# classificano i pixel ricostruiti (sempre 65.536 feature).
+#
+# | Scenario | Dati memorizzati | Dim. al KNN |
+# |---|---|---|
+# | **Raw Pixels** | 100% | 65.536 |
+# | **SVD k=5** | ~3.9% | 65.536 |
+# | **SVD k=10** | ~7.8% | 65.536 |
+# | **SVD k=20** | ~15.7% | 65.536 |
+# | **SVD k=50** | ~39.1% | 65.536 |
+#
+# ### Strategia 2: PCA -- Riduzione dimensionale del dataset
+# Si applica PCA **all'intero dataset** (matrice 320x65.536) per estrarre le direzioni
+# di massima varianza. Il KNN lavora nello spazio ridotto.
+#
+# | Scenario | Componenti | Riduzione dim. |
+# |---|---|---|
+# | **Raw Pixels** | 65.536 | 0% |
+# | **PCA (10)** | 10 | 99.98% |
+# | **PCA (25)** | 25 | 99.96% |
+# | **PCA (50)** | 50 | 99.92% |
+# | **PCA (100)** | 100 | 99.85% |
+# | **PCA (150)** | 150 | 99.77% |
+#
+# Per evitare **data leakage**, StandardScaler e PCA vengono fittati solo sul training set
+# di ogni fold tramite `sklearn.Pipeline`.
+#
+# La validazione avviene tramite **Stratified 5-Fold Cross-Validation** per garantire
+# robustezza con il dataset limitato (~320 campioni).
+
+# %%
+# === 6.1 PREPARAZIONE SCENARI ===
+scenarios = prepare_feature_sets(all_images, labels)
+
+# %%
+# === 6.2 CLASSIFICAZIONE KNN CON CROSS-VALIDATION ===
+results = run_classification(scenarios, labels)
+
+# %%
+# === 6.3 CONFUSION MATRIX PER SCENARIO ===
+plot_confusion_matrix(scenarios, labels)
+
+# %%
+# === 6.4 CURVE ROC MULTICLASSE (ONE-VS-REST) ===
+plot_roc_curves(scenarios, labels)
+
+# %%
+# === 6.5 CONFRONTO METRICHE TRA SCENARI ===
+plot_classification_comparison(results)
+
+# %%
+# === 6.6 HERO CHART: ACCURACY vs COMPRESSIONE ===
+plot_hero_tradeoff(results)
+
+# %% [markdown]
+# ---
 # ## Conclusioni
 #
 # 1. **SVD come strumento di compressione**: Con sole 20-50 componenti singolari (su 256
@@ -154,3 +227,18 @@ print_summary_table(demo_img, class_name="Normal")
 #
 # 4. **Eigenfaces (Eigen-Xrays)**: Le prime componenti principali rivelano i pattern
 #    strutturali dominanti nelle radiografie polmonari.
+#
+# 5. **SVD: Compressione vs Classificazione**: Comprimere le immagini con SVD troncata
+#    (k=5 a k=50) e poi classificare i pixel ricostruiti produce accuracy comparabili
+#    ai pixel grezzi (~80%). Questo dimostra che il rumore ad alta frequenza rimosso
+#    dalla SVD non contiene informazione diagnostica rilevante.
+#
+# 6. **PCA: Riduzione Dimensionale vs Classificazione**: Proiettare il dataset su
+#    10-150 componenti principali (riducendo la dimensionalita' fino al 99.98%) mantiene
+#    la capacita' discriminativa. PCA agisce come feature extractor, selezionando le
+#    direzioni di massima varianza inter-immagine.
+#
+# 7. **Conclusione Chiave** (Hero Chart): I due grafici affiancati mostrano che entrambe
+#    le strategie -- compressione SVD dell'immagine e riduzione PCA del dataset --
+#    preservano la capacita' diagnostica rispetto alla baseline Raw Pixels, confermando
+#    il valore pratico di SVD/PCA nella pipeline di analisi di immagini mediche.

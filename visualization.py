@@ -26,9 +26,9 @@ def plot_exploration(sample_images: dict[str, np.ndarray], save: bool = True) ->
         axes[0, i].axis('off')
 
         axes[1, i].hist(sample_images[cls].ravel(), bins=64, color='steelblue',
-                        edgecolor='white', alpha=0.85)
+                        edgecolor='white', alpha=0.85, density=True)
         axes[1, i].set_xlabel('Intensità pixel')
-        axes[1, i].set_ylabel('Frequenza')
+        axes[1, i].set_ylabel('Densità')
         axes[1, i].set_title(f'Istogramma — {cls}')
 
     plt.suptitle('Fase 1 — Campioni e Distribuzione dei Pixel',

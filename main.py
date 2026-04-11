@@ -99,6 +99,36 @@ def main():
     # 5.4 Tabella riassuntiva
     print_summary_table(demo_img, class_name="Normal")
 
+    # ==================================================================
+    #  FASE 6 -- Classificazione e Confronto Feature
+    # ==================================================================
+    print("\n" + "#" * 60)
+    print("  FASE 6 -- CLASSIFICAZIONE E CONFRONTO FEATURE")
+    print("#" * 60)
+
+    from src.classification import (prepare_feature_sets, run_classification,
+                                     plot_confusion_matrix, plot_roc_curves,
+                                     plot_classification_comparison,
+                                     plot_hero_tradeoff)
+
+    # 6.1 Preparazione scenari (Raw, PCA 50, PCA 150, SVD k=10, SVD k=50)
+    scenarios = prepare_feature_sets(all_images, labels)
+
+    # 6.2 Classificazione KNN con cross-validation stratificata
+    results = run_classification(scenarios, labels)
+
+    # 6.3 Confusion matrices
+    plot_confusion_matrix(scenarios, labels)
+
+    # 6.4 Curve ROC multiclasse
+    plot_roc_curves(scenarios, labels)
+
+    # 6.5 Confronto metriche tra scenari
+    plot_classification_comparison(results)
+
+    # 6.6 Hero chart: Accuracy vs Compressione
+    plot_hero_tradeoff(results)
+
     print("\n" + "=" * 60)
     print("  [OK] PROGETTO COMPLETATO -- Tutti i grafici salvati in output/")
     print("=" * 60)

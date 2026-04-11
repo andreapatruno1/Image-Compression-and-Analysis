@@ -42,6 +42,13 @@ K_VALUES_TABLE = [1, 5, 10, 20, 50, 100, 150, 200, 256]  # k per tabella riassun
 # ─── Parametri PCA ────────────────────────────────────────────────────────────
 PCA_N_COMPONENTS = 50                   # componenti per la PCA
 
+# ─── Parametri Classificazione ────────────────────────────────────────────────
+KNN_N_NEIGHBORS = 5                     # k per KNN
+CV_N_FOLDS = 5                          # fold per cross-validation stratificata
+RANDOM_STATE = 42                       # seed per riproducibilità
+SVD_K_VALUES = [5, 10, 20, 50]           # valori di k per gli scenari SVD
+PCA_COMPONENTS_LIST = [10, 25, 50, 100, 150]  # componenti PCA per gli scenari
+
 # ─── Colori per le classi ─────────────────────────────────────────────────────
 CLASS_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12']
 

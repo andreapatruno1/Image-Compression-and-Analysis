@@ -20,6 +20,7 @@
    - 4.3 [Fase 3 — SVD (Motore Matematico)](#43-fase-3--svd-motore-matematico)
    - 4.4 [Fase 4 — Ricostruzione e Visualizzazione](#44-fase-4--ricostruzione-e-visualizzazione)
    - 4.5 [Fase 5 — Analisi Statistica e PCA](#45-fase-5--analisi-statistica-e-pca)
+   - 4.6 [Fase 6 — Classificazione e Confronto Feature](#46-fase-6--classificazione-e-confronto-feature)
 5. [Architettura del Codice](#5-architettura-del-codice)
 6. [Discussione Critica](#6-discussione-critica)
 7. [Conclusioni](#7-conclusioni)
@@ -368,6 +369,59 @@ Le prime 10 componenti principali, visualizzate come immagini 256 × 256 con col
 
 ---
 
+### 4.6 Fase 6 — Classificazione e Confronto Feature
+
+**Obiettivo:** validare quantitativamente che la compressione (SVD) e la riduzione dimensionale (PCA) **preservano la capacità diagnostica** confrontandole con la classificazione sui pixel grezzi.
+
+Si addestrano classificatori **KNN (k=5)** con **Stratified 5-Fold Cross-Validation**, organizzati in due strategie distinte:
+
+#### Strategia 1: SVD — Compressione dell'Immagine
+
+Si applica la SVD troncata **a ogni singola immagine** per comprimerla, poi si classificano i 65.536 pixel ricostruiti.
+
+| Scenario | Dati memorizzati | Dim. al KNN |
+|---|---|---|
+| **Raw Pixels** | 100% | 65.536 |
+| **SVD k=5** | ~3.9% | 65.536 |
+| **SVD k=10** | ~7.8% | 65.536 |
+| **SVD k=20** | ~15.7% | 65.536 |
+| **SVD k=50** | ~39.1% | 65.536 |
+
+**Messaggio:** la SVD rimuove rumore ad alta frequenza senza perdere informazione diagnostica.
+
+#### Strategia 2: PCA — Riduzione Dimensionale del Dataset
+
+Si applica PCA **all'intero dataset** (matrice 320×65.536) per estrarre le direzioni di massima varianza. Il KNN lavora nello spazio ridotto.
+
+| Scenario | Componenti | Riduzione dim. |
+|---|---|---|
+| **Raw Pixels** | 65.536 | 0% |
+| **PCA (10)** | 10 | 99.98% |
+| **PCA (25)** | 25 | 99.96% |
+| **PCA (50)** | 50 | 99.92% |
+| **PCA (100)** | 100 | 99.85% |
+| **PCA (150)** | 150 | 99.77% |
+
+**Messaggio:** PCA agisce come feature extractor, selezionando le direzioni di massima varianza inter-immagine.
+
+> **Nota metodologica:** per evitare **data leakage**, `StandardScaler` e `PCA` vengono fittati solo sul training set di ogni fold tramite `sklearn.Pipeline`.
+
+#### Risultati
+
+Tutti gli scenari raggiungono accuracy nell'intervallo **79–82%**, entro la banda di confidenza della baseline Raw Pixels (~80%). Il miglior scenario è PCA con 25 componenti (~82%).
+
+![Fase 6 — Confronto metriche](output/fase6_classification_comparison.png)
+
+#### Hero Chart: Trade-off Compressione vs Diagnostica
+
+I due grafici affiancati mostrano che:
+- **SVD** (sinistra): comprimere le immagini fino al 96% (k=5) non degrada l'accuracy
+- **PCA** (destra): ridurre la dimensionalità del 99.96% (25 componenti) mantiene o migliora l'accuracy
+
+![Fase 6 — Hero chart](output/fase6_hero_tradeoff.png)
+
+---
+
 ## 5. Architettura del Codice
 
 ```
@@ -377,8 +431,9 @@ Medical Image Compression and Analysis/
 ├── svd_engine.py         # SVD, ricostruzione troncata, metriche MSE/PSNR (Fase 3)
 ├── visualization.py      # Plot delle fasi 1, 2, 4
 ├── src/
-│   └── analysis.py       # Scree plot, MSE/PSNR, PCA, eigenfaces, tabella (Fase 5)
-├── main.py               # Script orchestratore (esegue le 5 fasi)
+│   ├── analysis.py       # Scree plot, MSE/PSNR, PCA, eigenfaces, tabella (Fase 5)
+│   └── classification.py # KNN, cross-validation, confronto feature (Fase 6)
+├── main.py               # Script orchestratore (esegue le 6 fasi)
 ├── medical_image_svd_pca.ipynb   # Notebook interattivo
 └── output/               # Grafici salvati (.png, 150 dpi)
 ```
@@ -390,7 +445,7 @@ Medical Image Compression and Analysis/
 | `numpy` | SVD (`np.linalg.svd`), operazioni matriciali |
 | `scipy.ndimage` | Rotazione immagini (correzione tilt) |
 | `Pillow` | I/O immagini, resize Lanczos |
-| `scikit-learn` | PCA con SVD randomizzata |
+| `scikit-learn` | PCA, KNN, Pipeline, cross-validation, metriche |
 | `matplotlib` + `seaborn` | Grafici e stile |
 
 ### Parametri configurabili (config.py)
@@ -404,7 +459,11 @@ Medical Image Compression and Analysis/
 | `K_VALUES_DEMO` | `[1,5,10,20,50,100,200]` | k per demo ricostruzione |
 | `K_VALUES_COMPARE` | `[5,20,50,100]` | k per confronto tra classi |
 | `K_RANGE_METRICS` | `range(1, 201)` | Range per curve MSE/PSNR |
-| `PCA_N_COMPONENTS` | `50` | Numero componenti PCA |
+| `PCA_N_COMPONENTS` | `50` | Numero componenti PCA (analisi) |
+| `KNN_N_NEIGHBORS` | `5` | k per KNN classificazione |
+| `CV_N_FOLDS` | `5` | Fold per cross-validation stratificata |
+| `SVD_K_VALUES` | `[5, 10, 20, 50]` | k SVD per classificazione |
+| `PCA_COMPONENTS_LIST` | `[10, 25, 50, 100, 150]` | Componenti PCA per classificazione |
 
 ---
 
@@ -419,6 +478,10 @@ Medical Image Compression and Analysis/
 3. **Gli eigenfaces rivelano pattern clinicamente interpretabili.** PC1 = contrasto globale, PC2 = simmetria laterale, PC3 = mediastino. L'algoritmo non conosce l'anatomia ma la "scopre" dai dati.
 
 4. **Il pre-processing è robusto.** Il sistema di validazione a più livelli (laterali, tilt eccessivo, padding corrotto, file noti) garantisce che solo immagini valide entrino nell'analisi.
+
+5. **La SVD preserva la capacità diagnostica.** La classificazione KNN su pixel ricostruiti con SVD troncata (k=5 a k=50) produce accuracy (~80–81%) comparabili ai pixel grezzi, confermando che il rumore ad alta frequenza rimosso non contiene informazione discriminativa.
+
+6. **La PCA è un feature extractor efficace.** Con soli 25 componenti (riduzione del 99.96%) si ottiene l'accuracy migliore (~82%), suggerendo che la PCA agisce anche come denoiser implicito.
 
 ### Limitazioni
 
@@ -436,6 +499,7 @@ Medical Image Compression and Analysis/
 - **t-SNE al posto di PCA 2D:** per visualizzare separabilità non-lineare tra classi
 - **Mappa di errore spaziale:** analizzare *dove* si concentra l'errore di ricostruzione sulla radiografia (zone anatomiche critiche vs background)
 - **SVD per denoising:** usare la ricostruzione troncata come filtro passa-basso per ridurre il rumore nelle rx
+- **Classificatori più sofisticati:** SVM, Random Forest o reti neurali per migliorare l'accuracy oltre l'80%
 
 ---
 
@@ -449,5 +513,7 @@ Medical Image Compression and Analysis/
 | **PCA = SVD su dati centrati** | Stessa base matematica, obiettivi complementari |
 | **Le eigenfaces rivelano pattern anatomo-clinici** | PC1: contrasto, PC2: simmetria, PC3: mediastino |
 | **PCA mostra separabilità parziale tra classi** | COVID-19/TB vs Normal/Pneumonia si separano su PC1; sovrapposizione residua |
+| **SVD preserva la capacità diagnostica** | Classificazione su pixel compressi (k=5–50) → accuracy ~80%, pari ai Raw Pixels |
+| **PCA è un feature extractor efficace** | 25 componenti (99.96% riduzione) → accuracy ~82%, superiore ai Raw Pixels |
 | **Il pre-processing è critico** | Senza correzione tilt e filtraggio, i risultati PCA sarebbero degradati |
 
