@@ -29,7 +29,7 @@ CLASSES = ["Corona Virus Disease", "Normal", "Pneumonia", "Tuberculosis"]
 # --- Parametri immagine --------------------------------------------------------
 TARGET_SIZE = (256, 256)                # dimensione di ridimensionamento
 SPLIT = ""                              # Lasciato vuoto perché le classi sono direttamente in 'raw'
-MAX_PER_CLASS = 80                      # immagini per classe da caricare
+MAX_PER_CLASS = 120                      # immagini per classe da caricare
 CORRECT_TILT = True                     # abilita correzione inclinazione
 MAX_TILT_ANGLE = 10                     # angolo massimo (gradi) oltre il quale l'immagine viene scartata
 
@@ -44,6 +44,8 @@ PCA_N_COMPONENTS = 50                   # componenti per la PCA
 
 # ─── Parametri Classificazione ────────────────────────────────────────────────
 KNN_N_NEIGHBORS = 5                     # k per KNN
+LR_MAX_ITER = 2000                      # iterazioni massime per Logistic Regression
+LR_C = 1.0                             # regolarizzazione inversa (1/λ)
 CV_N_FOLDS = 5                          # fold per cross-validation stratificata
 RANDOM_STATE = 42                       # seed per riproducibilità
 SVD_K_VALUES = [5, 10, 20, 50]           # valori di k per gli scenari SVD

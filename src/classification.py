@@ -1,12 +1,10 @@
 """
 classification.py -- Fase 6: Classificazione e Confronto Feature.
 
-Classificazione KNN su scenari multipli:
+Classificazione KNN e Logistic Regression su scenari multipli:
   1. Raw Pixels      (65 536 feature)  -- baseline
-  2. PCA  50 comp.   (50 feature)      -- riduzione aggressiva
-  3. PCA 150 comp.   (150 feature)     -- riduzione moderata
-  4. SVD k=10        (65 536 feature)  -- compressione forte
-  5. SVD k=50        (65 536 feature)  -- compressione leggera
+  2. PCA  n comp.    (n feature)       -- riduzione dimensionale
+  3. SVD k           (65 536 feature)  -- compressione immagine
 
 Usa sklearn Pipeline per evitare data leakage: StandardScaler e PCA vengono
 fittati SOLO sul training set di ogni fold.
@@ -18,6 +16,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
@@ -27,7 +26,8 @@ from sklearn.preprocessing import LabelBinarizer, StandardScaler
 
 from config import (CLASSES, CLASS_COLORS, OUTPUT_DIR,
                     KNN_N_NEIGHBORS, CV_N_FOLDS, RANDOM_STATE,
-                    SVD_K_VALUES, PCA_COMPONENTS_LIST)
+                    SVD_K_VALUES, PCA_COMPONENTS_LIST,
+                    LR_MAX_ITER, LR_C)
 from svd_engine import apply_svd, reconstruct_svd
 
 
@@ -42,6 +42,34 @@ def _knn_pipeline(pca_n=None):
         steps.append(('pca', PCA(n_components=pca_n)))
     steps.append(('knn', KNeighborsClassifier(n_neighbors=KNN_N_NEIGHBORS)))
     return Pipeline(steps)
+
+
+def _lr_pipeline(pca_n=None):
+    """Crea una pipeline StandardScaler -> [PCA] -> Logistic Regression.
+
+    Multinomiale con solver L-BFGS, regolarizzazione C e max_iter da config.
+    """
+    steps = [('scaler', StandardScaler())]
+    if pca_n is not None:
+        steps.append(('pca', PCA(n_components=pca_n)))
+    steps.append(('lr', LogisticRegression(
+        max_iter=LR_MAX_ITER, C=LR_C,
+        solver='lbfgs', random_state=RANDOM_STATE)))
+    return Pipeline(steps)
+
+
+def _get_pipeline_fn(classifier: str):
+    """Restituisce la funzione factory della pipeline per il classificatore."""
+    if classifier == 'lr':
+        return _lr_pipeline
+    return _knn_pipeline
+
+
+def _classifier_label(classifier: str) -> str:
+    """Restituisce un'etichetta leggibile per il classificatore."""
+    if classifier == 'lr':
+        return "Logistic Regression"
+    return f"KNN (k={KNN_N_NEIGHBORS})"
 
 
 def _svd_reconstruct_batch(all_images, k):
@@ -62,39 +90,59 @@ def _svd_reconstruct_batch(all_images, k):
 def prepare_feature_sets(
     all_images: np.ndarray,
     labels: np.ndarray,
+    classifier: str = 'knn',
+    svd_cache: dict = None,
     pca_model=None,
     X_pca: np.ndarray = None,
 ) -> dict[str, tuple[np.ndarray, Pipeline]]:
     """
     Prepara gli scenari per la classificazione.
 
+    Parameters
+    ----------
+    all_images : array di immagini (N, H, W)
+    labels     : etichette
+    classifier : 'knn' o 'lr'
+    svd_cache  : dict opzionale per cachare le ricostruzioni SVD
+                 (evita di ricalcolare quando si eseguono più classificatori)
+
     Returns
     -------
     scenarios : dict {nome: (X_data, pipeline)}
-        Ogni scenario contiene i dati e la pipeline da usare.
     """
+    pipe_fn = _get_pipeline_fn(classifier)
+    clf_label = _classifier_label(classifier)
+
     N = all_images.shape[0]
     X_flat = all_images.reshape(N, -1)
 
     scenarios = {}
 
     # --- Raw Pixels ---
-    scenarios["Raw Pixels (65,536)"] = (X_flat, _knn_pipeline())
-    print(f"  [Raw Pixels]       shape: {X_flat.shape}")
+    scenarios["Raw Pixels (65,536)"] = (X_flat, pipe_fn())
+    print(f"  [Raw Pixels]       shape: {X_flat.shape}  ({clf_label})")
 
     # --- PCA scenari ---
     for n_comp in PCA_COMPONENTS_LIST:
         name = f"PCA ({n_comp} comp.)"
-        scenarios[name] = (X_flat, _knn_pipeline(pca_n=n_comp))
-        print(f"  [{name}]     (Pipeline: Scaler -> PCA -> KNN)")
+        scenarios[name] = (X_flat, pipe_fn(pca_n=n_comp))
+        print(f"  [{name}]     (Pipeline: Scaler -> PCA -> {clf_label})")
 
     # --- SVD scenari ---
     for k in SVD_K_VALUES:
-        print(f"  [SVD k={k}]        ricostruzione...", end="", flush=True)
-        X_svd = _svd_reconstruct_batch(all_images, k)
+        # Usa la cache per evitare ricalcoli se già disponibili
+        if svd_cache is not None and k in svd_cache:
+            X_svd = svd_cache[k]
+            print(f"  [SVD k={k}]        (cache) shape: {X_svd.shape}  ({clf_label})")
+        else:
+            print(f"  [SVD k={k}]        ricostruzione...", end="", flush=True)
+            X_svd = _svd_reconstruct_batch(all_images, k)
+            print(f" shape: {X_svd.shape}  ({clf_label})")
+            if svd_cache is not None:
+                svd_cache[k] = X_svd
+
         name = f"SVD k={k} ({X_svd.shape[1]:,})"
-        scenarios[name] = (X_svd, _knn_pipeline())
-        print(f" shape: {X_svd.shape}")
+        scenarios[name] = (X_svd, pipe_fn())
 
     return scenarios
 
@@ -105,11 +153,11 @@ def prepare_feature_sets(
 
 def run_classification(
     scenarios: dict[str, tuple[np.ndarray, Pipeline]],
-    labels: np.ndarray
+    labels: np.ndarray,
+    classifier: str = 'knn'
 ) -> dict:
     """
-    Esegue KNN con Stratified K-Fold CV per tutti gli scenari.
-    Ogni Pipeline viene clonata per ogni fold per evitare data leakage.
+    Esegue classificazione con Stratified K-Fold CV per tutti gli scenari.
 
     Returns
     -------
@@ -119,6 +167,7 @@ def run_classification(
 
     cv = StratifiedKFold(n_splits=CV_N_FOLDS, shuffle=True,
                          random_state=RANDOM_STATE)
+    clf_label = _classifier_label(classifier)
     results = {}
 
     for scenario_name, (X, pipe) in scenarios.items():
@@ -152,7 +201,7 @@ def run_classification(
         return f"{mean*100:5.1f}%  (+/- {std*100:4.1f}%)"
 
     print("\n" + "=" * 100)
-    print(f"  RISULTATI CLASSIFICAZIONE -- KNN (k={KNN_N_NEIGHBORS})"
+    print(f"  RISULTATI CLASSIFICAZIONE -- {clf_label}"
           f" -- Stratified {CV_N_FOLDS}-Fold CV")
     print("=" * 100)
 
@@ -186,9 +235,13 @@ def run_classification(
 def plot_confusion_matrix(
     scenarios: dict[str, tuple[np.ndarray, Pipeline]],
     labels: np.ndarray,
+    classifier: str = 'knn',
     save: bool = True
 ) -> None:
     """Confusion matrix per ogni scenario."""
+    clf_label = _classifier_label(classifier)
+    suffix = f"_{classifier}" if classifier != 'knn' else ""
+
     n = len(scenarios)
     fig, axes = plt.subplots(1, n, figsize=(5.5 * n, 5))
     if n == 1:
@@ -198,12 +251,12 @@ def plot_confusion_matrix(
                          random_state=RANDOM_STATE)
     short_labels = ["COVID", "Normal", "Pneum.", "TB"]
 
-    for idx, (name, (X, pipe)) in enumerate(scenarios.items()):
+    for idx, (sc_name, (X, pipe)) in enumerate(scenarios.items()):
         y_pred = cross_val_predict(pipe, X, labels, cv=cv)
         cm = confusion_matrix(labels, y_pred, labels=CLASSES)
 
         im = axes[idx].imshow(cm, interpolation='nearest', cmap='Blues')
-        axes[idx].set_title(name, fontweight='bold', fontsize=10)
+        axes[idx].set_title(sc_name, fontweight='bold', fontsize=10)
         axes[idx].set_xlabel('Predetto')
         axes[idx].set_ylabel('Reale')
         axes[idx].set_xticks(range(len(CLASSES)))
@@ -220,11 +273,11 @@ def plot_confusion_matrix(
                                color="white" if cm[i, j] > thresh else "black")
         fig.colorbar(im, ax=axes[idx], fraction=0.046, pad=0.04)
 
-    plt.suptitle(f'Confusion Matrix -- KNN (k={KNN_N_NEIGHBORS})',
+    plt.suptitle(f'Confusion Matrix -- {clf_label}',
                  fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase6_confusion_matrices.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR, f'fase6_confusion_matrices{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -236,10 +289,14 @@ def plot_confusion_matrix(
 def plot_roc_curves(
     scenarios: dict[str, tuple[np.ndarray, Pipeline]],
     labels: np.ndarray,
+    classifier: str = 'knn',
     save: bool = True
 ) -> None:
     """Curve ROC One-vs-Rest per ogni scenario."""
     from sklearn.base import clone
+
+    clf_label = _classifier_label(classifier)
+    suffix = f"_{classifier}" if classifier != 'knn' else ""
 
     n = len(scenarios)
     fig, axes = plt.subplots(1, n, figsize=(5.5 * n, 5))
@@ -252,7 +309,7 @@ def plot_roc_curves(
     y_bin = lb.fit_transform(labels)
     short_labels = ["COVID", "Normal", "Pneum.", "TB"]
 
-    for idx, (name, (X, pipe)) in enumerate(scenarios.items()):
+    for idx, (sc_name, (X, pipe)) in enumerate(scenarios.items()):
         y_prob = np.zeros_like(y_bin, dtype=np.float64)
 
         for train_idx, test_idx in cv.split(X, labels):
@@ -263,7 +320,10 @@ def plot_roc_curves(
             pipe_fold.fit(X_train, y_train)
             proba = pipe_fold.predict_proba(X_test)
 
-            clf_classes = pipe_fold.named_steps['knn'].classes_
+            # Rileva automaticamente il classificatore (ultimo step della pipeline)
+            last_step_name = pipe_fold.steps[-1][0]
+            clf_classes = pipe_fold.named_steps[last_step_name].classes_
+
             for ci, cls_name in enumerate(lb.classes_):
                 if cls_name in clf_classes:
                     src_col = list(clf_classes).index(cls_name)
@@ -279,7 +339,7 @@ def plot_roc_curves(
 
         axes[idx].plot([0, 1], [0, 1], 'k--', alpha=0.4, linewidth=1)
         mean_auc = np.mean(macro_auc)
-        axes[idx].set_title(f'{name}\nMacro AUC = {mean_auc:.3f}',
+        axes[idx].set_title(f'{sc_name}\nMacro AUC = {mean_auc:.3f}',
                             fontweight='bold', fontsize=10)
         axes[idx].set_xlabel('False Positive Rate')
         axes[idx].set_ylabel('True Positive Rate')
@@ -287,11 +347,11 @@ def plot_roc_curves(
         axes[idx].set_xlim([-0.02, 1.02])
         axes[idx].set_ylim([-0.02, 1.02])
 
-    plt.suptitle(f'Curve ROC -- KNN (k={KNN_N_NEIGHBORS}) -- One-vs-Rest',
+    plt.suptitle(f'Curve ROC -- {clf_label} -- One-vs-Rest',
                  fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase6_roc_curves.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR, f'fase6_roc_curves{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -302,9 +362,13 @@ def plot_roc_curves(
 
 def plot_classification_comparison(
     results: dict,
+    classifier: str = 'knn',
     save: bool = True
 ) -> None:
     """Grafico a barre raggruppate: confronto metriche tra scenari."""
+    clf_label = _classifier_label(classifier)
+    suffix = f"_{classifier}" if classifier != 'knn' else ""
+
     metrics = ["accuracy", "precision", "recall", "f1"]
     metric_labels = ["Accuracy", "Precision", "Recall", "F1-Score"]
     scenario_names = list(results.keys())
@@ -346,16 +410,22 @@ def plot_classification_comparison(
     ax.set_xticks(x)
     ax.set_xticklabels(metric_labels, fontsize=12)
     ax.set_ylabel('Score', fontsize=12)
-    ax.set_title(f'Confronto Metriche -- KNN (k={KNN_N_NEIGHBORS}) -- '
+    ax.set_title(f'Confronto Metriche -- {clf_label} -- '
                  f'Stratified {CV_N_FOLDS}-Fold CV',
                  fontsize=14, fontweight='bold')
-    ax.set_ylim(0.65, 1.0)
+
+    # Y-limit dinamico basato sui dati
+    all_lower = [results[s][m][0] - results[s][m][1]
+                 for s in scenario_names for m in metrics]
+    y_min = max(0.50, min(all_lower) - 0.05)
+    ax.set_ylim(y_min, 1.02)
     ax.legend(fontsize=9, loc='upper right')
     ax.grid(axis='y', alpha=0.3)
 
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase6_classification_comparison.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR,
+                    f'fase6_classification_comparison{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -366,6 +436,7 @@ def plot_classification_comparison(
 
 def plot_hero_tradeoff(
     results: dict,
+    classifier: str = 'knn',
     save: bool = True
 ) -> None:
     """Grafico 'eroe' a due pannelli, design pulito.
@@ -374,6 +445,9 @@ def plot_hero_tradeoff(
     Destra:   PCA — Accuracy vs n  (asse secondario: feature usate su 65.536)
     """
     from config import TARGET_SIZE
+
+    clf_label = _classifier_label(classifier)
+    suffix = f"_{classifier}" if classifier != 'knn' else ""
 
     h, w = TARGET_SIZE
     n_pixels = h * w
@@ -443,7 +517,8 @@ def plot_hero_tradeoff(
 
     ax1.set_xlabel('Rango SVD (k)', fontsize=12, fontweight='bold')
     ax1.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
-    ax1.set_title('SVD: Compressione Immagine', fontsize=14, fontweight='bold')
+    ax1.set_title(f'SVD: Compressione Immagine ({clf_label})',
+                  fontsize=14, fontweight='bold')
     ax1.legend(fontsize=9, loc='lower right')
     ax1.grid(True, alpha=0.25)
     ax1.set_ylim(max(0.65, raw_acc - 0.06), min(1.0, raw_acc + 0.06))
@@ -451,8 +526,13 @@ def plot_hero_tradeoff(
         ax1.set_xlim(min(ks) - 3, max(ks) + 5)
 
     # Take-away SVD
+    if classifier == 'knn':
+        svd_text = 'Comprimere al 4% dei dati\nnon degrada la classificazione'
+    else:
+        svd_text = 'Comprimere al 7.8% (k=10)\npreserva o migliora l\'accuratezza'
+        
     ax1.text(0.03, 0.97,
-             'Comprimere al 4% dei dati\nnon degrada la classificazione',
+             svd_text,
              transform=ax1.transAxes, fontsize=9.5, va='top',
              fontstyle='italic',
              bbox=dict(boxstyle='round,pad=0.4', fc='#fff8e7',
@@ -492,7 +572,8 @@ def plot_hero_tradeoff(
 
     ax2.set_xlabel('Componenti PCA (n)', fontsize=12, fontweight='bold')
     ax2.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
-    ax2.set_title('PCA: Riduzione Dimensionale', fontsize=14, fontweight='bold')
+    ax2.set_title(f'PCA: Riduzione Dimensionale ({clf_label})',
+                  fontsize=14, fontweight='bold')
     ax2.legend(fontsize=9, loc='lower right')
     ax2.grid(True, alpha=0.25)
     ax2.set_ylim(max(0.65, raw_acc - 0.06), min(1.0, raw_acc + 0.06))
@@ -500,18 +581,119 @@ def plot_hero_tradeoff(
         ax2.set_xlim(min(ns) - 8, max(ns) + 15)
 
     # Take-away PCA
+    if classifier == 'knn':
+        pca_text = '25 feature su 65.536 (0.04%)\nclassificano meglio dei pixel grezzi'
+    else:
+        pca_text = 'La Logistic Regression sale con n\nraggiungendo la baseline a 150 comp.'
+        
     ax2.text(0.03, 0.97,
-             '25 feature su 65.536 (0.04%)\nclassificano meglio dei pixel grezzi',
+             pca_text,
              transform=ax2.transAxes, fontsize=9.5, va='top',
              fontstyle='italic',
-             bbox=dict(boxstyle='round,pad=0.4', fc='#e8f8e8',
+             bbox=dict(boxstyle='round,pad=0.4', fc='#effbf3',
                        ec='#27ae60', alpha=0.95))
 
-    fig.suptitle('Trade-off: Compressione / Riduzione vs Capacità Diagnostica',
+    fig.suptitle(f'Trade-off: Compressione / Riduzione vs Capacità Diagnostica'
+                 f' ({clf_label})',
                  fontsize=15, fontweight='bold', y=1.01)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase6_hero_tradeoff.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR,
+                    f'fase6_hero_tradeoff{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
+
+# ============================================================================
+#  6.7 -- CONFRONTO DIRETTO KNN vs LOGISTIC REGRESSION
+# ============================================================================
+
+def plot_knn_vs_lr(
+    results_knn: dict,
+    results_lr: dict,
+    save: bool = True
+) -> None:
+    """Confronto diretto KNN vs Logistic Regression su tutti gli scenari.
+
+    Genera un grafico 2×2 (Accuracy, Precision, Recall, F1) con barre
+    affiancate KNN/LR per ogni scenario.
+    """
+    metrics = ["accuracy", "precision", "recall", "f1"]
+    metric_labels = ["Accuracy", "Precision", "Recall", "F1-Score"]
+
+    # Scenari comuni ai due classificatori
+    common_scenarios = [s for s in results_knn if s in results_lr]
+    n = len(common_scenarios)
+
+    # Abbreviazioni per leggibilità sull'asse X
+    short_names = []
+    for s in common_scenarios:
+        if s.startswith("Raw"):
+            short_names.append("Raw")
+        elif s.startswith("PCA"):
+            n_comp = s.split("(")[1].split(" ")[0]
+            short_names.append(f"PCA-{n_comp}")
+        elif s.startswith("SVD"):
+            k_val = s.split("k=")[1].split(" ")[0]
+            short_names.append(f"SVD-{k_val}")
+        else:
+            short_names.append(s[:12])
+
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    axes = axes.ravel()
+
+    color_knn = '#3498db'
+    color_lr = '#e74c3c'
+
+    for m_idx, (metric, m_label) in enumerate(zip(metrics, metric_labels)):
+        ax = axes[m_idx]
+        x = np.arange(n)
+        width = 0.35
+
+        means_knn = [results_knn[s][metric][0] for s in common_scenarios]
+        stds_knn  = [results_knn[s][metric][1] for s in common_scenarios]
+        means_lr  = [results_lr[s][metric][0]  for s in common_scenarios]
+        stds_lr   = [results_lr[s][metric][1]  for s in common_scenarios]
+
+        bars1 = ax.bar(x - width/2, means_knn, width, yerr=stds_knn,
+                       capsize=3, label=f'KNN (k={KNN_N_NEIGHBORS})',
+                       color=color_knn, edgecolor='white', linewidth=0.8,
+                       alpha=0.85)
+        bars2 = ax.bar(x + width/2, means_lr, width, yerr=stds_lr,
+                       capsize=3, label='Logistic Regression',
+                       color=color_lr, edgecolor='white', linewidth=0.8,
+                       alpha=0.85)
+
+        # Etichette sopra le barre
+        for bar, mean_val in zip(bars1, means_knn):
+            ax.text(bar.get_x() + bar.get_width()/2,
+                    bar.get_height() + 0.008,
+                    f'{mean_val*100:.1f}%', ha='center', va='bottom',
+                    fontsize=7, fontweight='bold', color=color_knn)
+        for bar, mean_val in zip(bars2, means_lr):
+            ax.text(bar.get_x() + bar.get_width()/2,
+                    bar.get_height() + 0.008,
+                    f'{mean_val*100:.1f}%', ha='center', va='bottom',
+                    fontsize=7, fontweight='bold', color=color_lr)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(short_names, fontsize=9, rotation=30, ha='right')
+        ax.set_ylabel(m_label, fontsize=11)
+        ax.set_title(m_label, fontsize=13, fontweight='bold')
+        ax.legend(fontsize=9)
+        ax.grid(axis='y', alpha=0.3)
+
+        # Y-limit dinamico
+        all_lower = means_knn + means_lr
+        all_stds = stds_knn + stds_lr
+        y_min = min(v - s for v, s in zip(all_lower, all_stds))
+        ax.set_ylim(max(0.50, y_min - 0.05), 1.02)
+
+    fig.suptitle(f'Confronto KNN vs Logistic Regression -- '
+                 f'Stratified {CV_N_FOLDS}-Fold CV',
+                 fontsize=15, fontweight='bold')
+    plt.tight_layout()
+    if save:
+        plt.savefig(os.path.join(OUTPUT_DIR, 'fase6_knn_vs_lr.png'),
+                    dpi=150, bbox_inches='tight')
+    plt.show()

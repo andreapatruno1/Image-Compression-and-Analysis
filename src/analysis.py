@@ -24,19 +24,35 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
     for i, cls in enumerate(CLASSES):
-        img = images_by_class[cls][0]
-        _, S, _ = apply_svd(img)
-        cum_var = cumulative_variance(S)
+        all_cum_vars = []
+        all_S = []
+        
+        for img in images_by_class[cls]:
+            _, S, _ = apply_svd(img)
+            cum_var = cumulative_variance(S)
+            all_cum_vars.append(cum_var)
+            all_S.append(S[:50])
+            
+        mean_cum_var = np.mean(all_cum_vars, axis=0)
+        std_cum_var = np.std(all_cum_vars, axis=0)
+        mean_S = np.mean(all_S, axis=0)
 
-        axes[0].plot(cum_var, label=cls, color=CLASS_COLORS[i], linewidth=2)
+        x_range = range(len(mean_cum_var))
+        axes[0].plot(x_range, mean_cum_var, label=cls, color=CLASS_COLORS[i], linewidth=2)
+        axes[0].fill_between(x_range, 
+                             mean_cum_var - std_cum_var, 
+                             mean_cum_var + std_cum_var, 
+                             alpha=0.2, color=CLASS_COLORS[i])
 
-        k90 = find_k_for_variance(S, 0.90)
-        k95 = find_k_for_variance(S, 0.95)
-        k99 = find_k_for_variance(S, 0.99)
+        # Usa la curva media per calcolare k90, k95, k99
+        k90 = int(np.argmax(mean_cum_var >= 0.90)) + 1 if np.any(mean_cum_var >= 0.90) else len(mean_cum_var)
+        k95 = int(np.argmax(mean_cum_var >= 0.95)) + 1 if np.any(mean_cum_var >= 0.95) else len(mean_cum_var)
+        k99 = int(np.argmax(mean_cum_var >= 0.99)) + 1 if np.any(mean_cum_var >= 0.99) else len(mean_cum_var)
+        
         print(f"{cls:30s}:  k(90%)={k90:3d}   k(95%)={k95:3d}   k(99%)={k99:3d}  "
-              f"su {len(S)} totali")
+              f"su {len(mean_cum_var)} totali (valori medi)")
 
-        axes[1].plot(S[:50], label=cls, color=CLASS_COLORS[i], linewidth=2,
+        axes[1].plot(mean_S, label=cls, color=CLASS_COLORS[i], linewidth=2,
                      marker='o', markersize=3)
 
     axes[0].axhline(y=0.90, color='gray', linestyle='--', alpha=0.6, label='90%')
@@ -44,13 +60,13 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
     axes[0].axhline(y=0.99, color='gray', linestyle='-.', alpha=0.6, label='99%')
     axes[0].set_xlabel('Numero di componenti (k)')
     axes[0].set_ylabel('Varianza cumulativa spiegata')
-    axes[0].set_title('Scree Plot — Varianza Cumulativa', fontweight='bold')
+    axes[0].set_title('Scree Plot — Varianza Cumulativa (Media ± std)', fontweight='bold')
     axes[0].legend(fontsize=10)
     axes[0].set_xlim(0, 100)
 
     axes[1].set_xlabel('Indice i')
-    axes[1].set_ylabel('Valore singolare S(i)')
-    axes[1].set_title('Decadimento dei Valori Singolari (primi 50)', fontweight='bold')
+    axes[1].set_ylabel('Valore singolare S(i) medio')
+    axes[1].set_title('Decadimento dei Valori Singolari (primi 50 medi)', fontweight='bold')
     axes[1].set_yscale('log')
     axes[1].legend(fontsize=10)
 
@@ -66,45 +82,56 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_mse_psnr(images_by_class: dict[str, np.ndarray], save: bool = True) -> None:
-    """Grafici MSE e PSNR in funzione del numero di componenti k.
-
-    Ottimizzazione: il MSE viene calcolato direttamente dai valori singolari
-    senza ricostruire l'immagine. Dalla teoria SVD:
-        MSE(k) = sum(σ_i² per i > k) / (m × n)
-    Questo è matematicamente equivalente ma evita 200 moltiplicazioni matriciali.
-    """
+    """Grafici MSE e PSNR medi in funzione del numero di componenti k."""
     k_range = np.array(list(K_RANGE_METRICS))
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
     for i, cls in enumerate(CLASSES):
-        img = images_by_class[cls][0]
-        m, n = img.shape
-        _, S, _ = apply_svd(img)
+        all_mse = []
+        all_psnr = []
+        
+        for img in images_by_class[cls]:
+            m, n = img.shape
+            _, S, _ = apply_svd(img)
 
-        # Calcolo vettorizzato: MSE(k) = sum(S[k:]²) / (m*n)
-        S_sq = S ** 2
-        total_energy = np.sum(S_sq)
-        cumsum_S_sq = np.cumsum(S_sq)
-        # Per ogni k, l'energia residua è total - cumsum fino a k
-        mse_vals = (total_energy - cumsum_S_sq[k_range - 1]) / (m * n)
-        psnr_vals = np.where(
-            mse_vals == 0,
-            np.inf,
-            10 * np.log10(1.0 / mse_vals)
-        )
+            # Calcolo vettorizzato: MSE(k) = sum(S[k:]²) / (m*n)
+            S_sq = S ** 2
+            total_energy = np.sum(S_sq)
+            cumsum_S_sq = np.cumsum(S_sq)
+            mse_vals = (total_energy - cumsum_S_sq[k_range - 1]) / (m * n)
+            psnr_vals = np.where(
+                mse_vals == 0,
+                100, # valore cap per evitare inf
+                10 * np.log10(1.0 / mse_vals)
+            )
+            all_mse.append(mse_vals)
+            all_psnr.append(psnr_vals)
+            
+        mean_mse = np.mean(all_mse, axis=0)
+        std_mse = np.std(all_mse, axis=0)
+        
+        mean_psnr = np.mean(all_psnr, axis=0)
+        std_psnr = np.std(all_psnr, axis=0)
 
-        axes[0].plot(k_range, mse_vals, label=cls, color=CLASS_COLORS[i], linewidth=2)
-        axes[1].plot(k_range, psnr_vals, label=cls, color=CLASS_COLORS[i], linewidth=2)
+        axes[0].plot(k_range, mean_mse, label=cls, color=CLASS_COLORS[i], linewidth=2)
+        axes[0].fill_between(k_range, mean_mse - std_mse, mean_mse + std_mse, alpha=0.2, color=CLASS_COLORS[i])
+        
+        axes[1].plot(k_range, mean_psnr, label=cls, color=CLASS_COLORS[i], linewidth=2)
+        axes[1].fill_between(k_range, mean_psnr - std_psnr, mean_psnr + std_psnr, alpha=0.2, color=CLASS_COLORS[i])
 
     axes[0].set_xlabel('Numero di componenti (k)')
-    axes[0].set_ylabel('MSE')
-    axes[0].set_title('MSE vs k — Errore di Ricostruzione', fontweight='bold')
+    axes[0].set_ylabel('MSE medio')
+    axes[0].set_title('MSE vs k — Errore di Ricostruzione (Media ± std)', fontweight='bold')
     axes[0].legend()
 
     axes[1].set_xlabel('Numero di componenti (k)')
-    axes[1].set_ylabel('PSNR (dB)')
-    axes[1].set_title('PSNR vs k — Qualità di Ricostruzione', fontweight='bold')
+    axes[1].set_ylabel('PSNR medio (dB)')
+    axes[1].set_title('PSNR vs k — Qualità di Ricostruzione (Media ± std)', fontweight='bold')
     axes[1].legend()
+
+    # Aggiungere linea di soglia PSNR "accettabile"
+    axes[1].axhline(y=30, color='gray', linestyle='--', alpha=0.5)
+    axes[1].text(max(k_range)*0.75, 30.5, 'Soglia accettabile (30 dB)', color='gray', fontsize=9)
 
     plt.tight_layout()
     if save:

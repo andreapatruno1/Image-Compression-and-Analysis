@@ -109,25 +109,46 @@ def main():
     from src.classification import (prepare_feature_sets, run_classification,
                                      plot_confusion_matrix, plot_roc_curves,
                                      plot_classification_comparison,
-                                     plot_hero_tradeoff)
+                                     plot_hero_tradeoff, plot_knn_vs_lr)
 
-    # 6.1 Preparazione scenari (Raw, PCA 50, PCA 150, SVD k=10, SVD k=50)
-    scenarios = prepare_feature_sets(all_images, labels)
+    # Cache SVD: le ricostruzioni vengono calcolate una sola volta
+    # e riusate per entrambi i classificatori
+    svd_cache = {}
 
-    # 6.2 Classificazione KNN con cross-validation stratificata
-    results = run_classification(scenarios, labels)
+    # 6.1a Preparazione scenari -- KNN
+    print("\n--- Preparazione scenari KNN ---")
+    scenarios_knn = prepare_feature_sets(all_images, labels,
+                                         classifier='knn',
+                                         svd_cache=svd_cache)
 
-    # 6.3 Confusion matrices
-    plot_confusion_matrix(scenarios, labels)
+    # 6.1b Preparazione scenari -- Logistic Regression (riusa cache SVD)
+    print("\n--- Preparazione scenari Logistic Regression ---")
+    scenarios_lr = prepare_feature_sets(all_images, labels,
+                                        classifier='lr',
+                                        svd_cache=svd_cache)
 
-    # 6.4 Curve ROC multiclasse
-    plot_roc_curves(scenarios, labels)
+    # 6.2 Classificazione con cross-validation stratificata
+    results_knn = run_classification(scenarios_knn, labels, classifier='knn')
+    results_lr  = run_classification(scenarios_lr,  labels, classifier='lr')
 
-    # 6.5 Confronto metriche tra scenari
-    plot_classification_comparison(results)
+    # 6.3 Confusion matrices (entrambi i classificatori)
+    plot_confusion_matrix(scenarios_knn, labels, classifier='knn')
+    plot_confusion_matrix(scenarios_lr,  labels, classifier='lr')
 
-    # 6.6 Hero chart: Accuracy vs Compressione
-    plot_hero_tradeoff(results)
+    # 6.4 Curve ROC multiclasse (entrambi)
+    plot_roc_curves(scenarios_knn, labels, classifier='knn')
+    plot_roc_curves(scenarios_lr,  labels, classifier='lr')
+
+    # 6.5 Confronto metriche tra scenari (entrambi)
+    plot_classification_comparison(results_knn, classifier='knn')
+    plot_classification_comparison(results_lr,  classifier='lr')
+
+    # 6.6 Hero chart: Accuracy vs Compressione (entrambi)
+    plot_hero_tradeoff(results_knn, classifier='knn')
+    plot_hero_tradeoff(results_lr,  classifier='lr')
+
+    # 6.7 Confronto diretto KNN vs Logistic Regression
+    plot_knn_vs_lr(results_knn, results_lr)
 
     print("\n" + "=" * 60)
     print("  [OK] PROGETTO COMPLETATO -- Tutti i grafici salvati in output/")
