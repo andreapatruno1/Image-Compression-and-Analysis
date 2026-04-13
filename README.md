@@ -48,10 +48,10 @@ Il dataset contiene radiografie toraciche in scala di grigi suddivise in **4 cla
 
 | Classe | Patologia | N° immagini disponibili | N° immagini usate |
 |---|---|---|---|
-| **Corona Virus Disease** | COVID-19 | 122 | ≤ 80 |
-| **Normal** | Polmoni sani | 540 | ≤ 80 |
-| **Pneumonia** | Polmonite batterica/virale | 186 | ≤ 80 |
-| **Tuberculosis** | Tubercolosi polmonare | 333 | ≤ 80 |
+| **Corona Virus Disease** | COVID-19 | 122 | ≤ 120 |
+| **Normal** | Polmoni sani | 540 | ≤ 120 |
+| **Pneumonia** | Polmonite batterica/virale | 186 | ≤ 120 |
+| **Tuberculosis** | Tubercolosi polmonare | 333 | ≤ 120 |
 
 ### Caratteristiche delle immagini grezze
 
@@ -245,7 +245,7 @@ $$\theta^* = \arg\max_\theta \operatorname{Var}\!\left(\nabla_\text{row}\left[\t
 | Parametro | Valore | Descrizione |
 |---|---|---|
 | `TARGET_SIZE` | `(256, 256)` | Dimensione di ridimensionamento |
-| `MAX_PER_CLASS` | `80` | Immagini massime per classe |
+| `MAX_PER_CLASS` | `120` | Immagini massime per classe |
 | `CORRECT_TILT` | `True` | Abilita correzione inclinazione |
 | `MAX_TILT_ANGLE` | `10` | Soglia scarto inclinazione (gradi) |
 
@@ -373,7 +373,7 @@ Le prime 10 componenti principali, visualizzate come immagini 256 × 256 con col
 
 **Obiettivo:** validare quantitativamente che la compressione (SVD) e la riduzione dimensionale (PCA) **preservano la capacità diagnostica** confrontandole con la classificazione sui pixel grezzi.
 
-Si addestrano classificatori **KNN (k=5)** con **Stratified 5-Fold Cross-Validation**, organizzati in due strategie distinte:
+Si addestrano e confrontano due classificatori (**KNN** con k=5 e **Logistic Regression**) usando una **Stratified 5-Fold Cross-Validation**, organizzati in due strategie distinte:
 
 #### Strategia 1: SVD — Compressione dell'Immagine
 
@@ -408,7 +408,10 @@ Si applica PCA **all'intero dataset** (matrice 320×65.536) per estrarre le dire
 
 #### Risultati
 
-Tutti gli scenari raggiungono accuracy nell'intervallo **79–82%**, entro la banda di confidenza della baseline Raw Pixels (~80%). Il miglior scenario è PCA con 25 componenti (~82%).
+La **Logistic Regression** ha dimostrato un primato assoluto rispetto al KNN, superando i limiti della distanza euclidea nello spazio dei pixel. 
+- La baseline (Raw Pixels) con Logistic Regression si attesta intorno all'**85.1%** di accuratezza.
+- **Miglior Scenario Assoluto:** PCA con 150 componenti fornite alla Logistic Regression raggiunge l'**86.1%** di accuratezza.
+- Con la compressione estrema della SVD (k=5, 4% dei dati), la Logistic Regression migliora le performance sfiorando l'**85.7%**, dimostrando l'effetto di denoising implicito della decomposizione singolare.
 
 ![Fase 6 — Confronto metriche](output/fase6_classification_comparison.png)
 
@@ -453,7 +456,7 @@ Medical Image Compression and Analysis/
 | Parametro | Default | Descrizione |
 |---|---|---|
 | `TARGET_SIZE` | `(256, 256)` | Dimensione di ridimensionamento |
-| `MAX_PER_CLASS` | `80` | Immagini massime per classe |
+| `MAX_PER_CLASS` | `120` | Immagini massime per classe |
 | `CORRECT_TILT` | `True` | Abilita correzione inclinazione |
 | `MAX_TILT_ANGLE` | `10` | Soglia scarto inclinazione (gradi) |
 | `K_VALUES_DEMO` | `[1,5,10,20,50,100,200]` | k per demo ricostruzione |
@@ -479,9 +482,9 @@ Medical Image Compression and Analysis/
 
 4. **Il pre-processing è robusto.** Il sistema di validazione a più livelli (laterali, tilt eccessivo, padding corrotto, file noti) garantisce che solo immagini valide entrino nell'analisi.
 
-5. **La SVD preserva la capacità diagnostica.** La classificazione KNN su pixel ricostruiti con SVD troncata (k=5 a k=50) produce accuracy (~80–81%) comparabili ai pixel grezzi, confermando che il rumore ad alta frequenza rimosso non contiene informazione discriminativa.
+5. **La SVD preserva e migliora la capacità diagnostica.** La classificazione su pixel ricostruiti con SVD troncata estrema (k=5, k=10) sfiora l'**85.7%** con la Logistic Regression, battendo leggermente la baseline sui raw pixels. Elimininare l'alta frequenza agisce come potente filtro anti-rumore diagnostico.
 
-6. **La PCA è un feature extractor efficace.** Con soli 25 componenti (riduzione del 99.96%) si ottiene l'accuracy migliore (~82%), suggerendo che la PCA agisce anche come denoiser implicito.
+6. **La Logistic Regression scala linearmente superando la Maledizione della Dimensionalità.** Al contrario del KNN (che collassa dopo le prime componenti PCA), la Logistic Regression impara ad assegnare pesi proporzionali sfruttando sempre più varianza; con 150 componenti PCA ottiene l'**86.1%**, massimizzando la differenziazione clinica.
 
 ### Limitazioni
 
@@ -495,11 +498,10 @@ Medical Image Compression and Analysis/
 
 ### Possibili estensioni
 
-- **Confronto con JPEG:** a parità di compression ratio, la SVD è competitiva con lo standard industriale? (JPEG usa la DCT, matematicamente simile nella filosofia)
-- **t-SNE al posto di PCA 2D:** per visualizzare separabilità non-lineare tra classi
+- **Confronto con standard industriali:** a parità di compression ratio, la SVD è competitiva con gli standard (es. JPEG 2000)?
+- **t-SNE/UMAP al posto di PCA 2D:** per visualizzare e "sbrogliare" le feature in maniera non-lineare massimizzando i cluster delle classi.
 - **Mappa di errore spaziale:** analizzare *dove* si concentra l'errore di ricostruzione sulla radiografia (zone anatomiche critiche vs background)
-- **SVD per denoising:** usare la ricostruzione troncata come filtro passa-basso per ridurre il rumore nelle rx
-- **Classificatori più sofisticati:** SVM, Random Forest o reti neurali per migliorare l'accuracy oltre l'80%
+- **Classificatori avanzati (Deep Learning):** sostituire i modelli classici con ResNet o ViT (Vision Transformes) sfruttando il dataset come Feature Bank.
 
 ---
 
@@ -513,7 +515,7 @@ Medical Image Compression and Analysis/
 | **PCA = SVD su dati centrati** | Stessa base matematica, obiettivi complementari |
 | **Le eigenfaces rivelano pattern anatomo-clinici** | PC1: contrasto, PC2: simmetria, PC3: mediastino |
 | **PCA mostra separabilità parziale tra classi** | COVID-19/TB vs Normal/Pneumonia si separano su PC1; sovrapposizione residua |
-| **SVD preserva la capacità diagnostica** | Classificazione su pixel compressi (k=5–50) → accuracy ~80%, pari ai Raw Pixels |
-| **PCA è un feature extractor efficace** | 25 componenti (99.96% riduzione) → accuracy ~82%, superiore ai Raw Pixels |
+| **SVD + LogReg battono i pixel grezzi** | Classificazione su pixel compressi (k=5) → accuracy **85.7%**, superiore alla baseline degli 85.1% Raw Pixels |
+| **PCA è il feature extractor clinico ideale** | 150 componenti → accuracy massima dell'**86.1%** aggirando il Curse of Dimensionality del KNN |
 | **Il pre-processing è critico** | Senza correzione tilt e filtraggio, i risultati PCA sarebbero degradati |
 

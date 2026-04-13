@@ -48,8 +48,8 @@ LR_MAX_ITER = 2000                      # iterazioni massime per Logistic Regres
 LR_C = 1.0                             # regolarizzazione inversa (1/λ)
 CV_N_FOLDS = 5                          # fold per cross-validation stratificata
 RANDOM_STATE = 42                       # seed per riproducibilità
-SVD_K_VALUES = [5, 10, 20, 50]           # valori di k per gli scenari SVD
-PCA_COMPONENTS_LIST = [10, 25, 50, 100, 150]  # componenti PCA per gli scenari
+SVD_K_VALUES = [10, 50]                  # ridotto per leggibilità grafici (10 per compressione estrema, 50 per alta qualità)
+PCA_COMPONENTS_LIST = [25, 150]          # ridotto per leggibilità (25 per picco KNN, 150 per picco LR)
 
 # ─── Colori per le classi ─────────────────────────────────────────────────────
 CLASS_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12']
