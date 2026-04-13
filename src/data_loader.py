@@ -10,8 +10,8 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import rotate as scipy_rotate
 
-from config import (DATASET_DIR, CLASSES, TARGET_SIZE, SPLIT, MAX_PER_CLASS,
-                    CORRECT_TILT, MAX_TILT_ANGLE)
+from .config import (DATASET_DIR, CLASSES, TARGET_SIZE, SPLIT, MAX_PER_CLASS,
+                     CORRECT_TILT, MAX_TILT_ANGLE)
 
 
 # ===========================================================================

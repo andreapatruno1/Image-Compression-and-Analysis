@@ -9,9 +9,9 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from config import CLASSES, CLASS_COLORS, OUTPUT_DIR, K_VALUES_DEMO, K_VALUES_COMPARE, TARGET_SIZE
-from svd_engine import apply_svd, reconstruct_svd, compression_ratio, mse, psnr
-from data_loader import detect_tilt_angle, correct_tilt, is_lateral_xray
+from .config import CLASSES, CLASS_COLORS, OUTPUT_DIR, K_VALUES_DEMO, K_VALUES_COMPARE, TARGET_SIZE
+from .svd_engine import apply_svd, reconstruct_svd, compression_ratio, mse, psnr
+from .data_loader import detect_tilt_angle, correct_tilt, is_lateral_xray
 
 
 def plot_exploration(sample_images: dict[str, np.ndarray], save: bool = True) -> None:

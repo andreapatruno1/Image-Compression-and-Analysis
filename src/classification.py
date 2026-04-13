@@ -24,11 +24,11 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score,
                              f1_score, confusion_matrix, roc_curve, auc)
 from sklearn.preprocessing import LabelBinarizer, StandardScaler
 
-from config import (CLASSES, CLASS_COLORS, OUTPUT_DIR,
-                    KNN_N_NEIGHBORS, CV_N_FOLDS, RANDOM_STATE,
-                    SVD_K_VALUES, PCA_COMPONENTS_LIST,
-                    LR_MAX_ITER, LR_C)
-from svd_engine import apply_svd, reconstruct_svd
+from .config import (CLASSES, CLASS_COLORS, OUTPUT_DIR,
+                     KNN_N_NEIGHBORS, CV_N_FOLDS, RANDOM_STATE,
+                     SVD_K_VALUES, PCA_COMPONENTS_LIST,
+                     LR_MAX_ITER, LR_C)
+from .svd_engine import apply_svd, reconstruct_svd
 
 
 # ============================================================================
@@ -444,7 +444,7 @@ def plot_hero_tradeoff(
     Sinistra: SVD — Accuracy vs k  (asse secondario: % dati memorizzati)
     Destra:   PCA — Accuracy vs n  (asse secondario: feature usate su 65.536)
     """
-    from config import TARGET_SIZE
+    from .config import TARGET_SIZE
 
     clf_label = _classifier_label(classifier)
     suffix = f"_{classifier}" if classifier != 'knn' else ""

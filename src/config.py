@@ -13,8 +13,8 @@ import seaborn as sns
 warnings.filterwarnings('ignore')
 
 # ─── Percorsi ─────────────────────────────────────────────────────────────────
-# Recupera il percorso della cartella principale del progetto (dove si trova questo file)
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Recupera il percorso della cartella principale del progetto (un livello sopra src/)
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Punta alla cartella 'raw' dentro 'data'
 DATASET_DIR = os.path.join(PROJECT_DIR, "data", "raw")

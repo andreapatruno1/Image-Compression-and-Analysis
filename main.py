@@ -14,15 +14,15 @@ Uso:
 import matplotlib
 matplotlib.use('Agg')
 
-from config import setup_plot_style
-from data_loader import (count_images, print_image_counts,
-                         load_sample_images, print_sample_properties,
-                         load_dataset, load_raw_samples)
-from svd_engine import apply_svd, print_svd_info
-from visualization import (plot_exploration, plot_svd_reconstruction,
-                           plot_class_comparison, plot_tilt_correction)
-from src.analysis import (plot_scree, plot_mse_psnr, run_pca, plot_pca_scatter,
-                          plot_eigenfaces, print_summary_table)
+from src.config import setup_plot_style
+from src.data_loader import (count_images, print_image_counts,
+                             load_sample_images, print_sample_properties,
+                             load_dataset, load_raw_samples)
+from src.svd_engine import apply_svd, print_svd_info
+from src.visualization import (plot_exploration, plot_svd_reconstruction,
+                               plot_class_comparison, plot_tilt_correction)
+from src.analysis import plot_scree, plot_mse_psnr, print_summary_table
+from src.pca_engine import run_pca, plot_pca_scatter, plot_eigenfaces
 
 
 def main():
