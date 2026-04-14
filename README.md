@@ -211,13 +211,39 @@ Si calcola il profilo medio di intensità per colonna e si conta la frazione di 
 **Obiettivo:** portare tutte le immagini in un formato uniforme adatto all'analisi matriciale.
 
 ```
-File .jpg/.png
-  → conversione L (scala di grigi)
-  → validazione (tilt + padding)
-  → correzione inclinazione
-  → resize 256×256 (Lanczos)
-  → normalizzazione [0, 1]
+File .jpg/.png (immagine grezza, dimensioni originali)
+  │
+  ├─ 1. Caricamento e conversione in scala di grigi (PIL, modalità 'L')
+  │
+  ├─ 2. Filtraggio radiografie laterali  ──► SCARTA se profilo attivo < 60%
+  │      (su immagine grezza, dimensioni originali)
+  │
+  ├─ 3. Validazione immagine  ──────────────► SCARTA se non valida
+  │      · file noti corrotti (blacklist 12 file)
+  │      · padding artificiale (≥ 3 angoli con media > 130)
+  │      · tilt eccessivo (|θ| > 10°)
+  │      (su immagine grezza, dimensioni originali)
+  │
+  ├─ 4. Resize 256×256 (interpolazione LANCZOS)
+  │
+  ├─ 5. Normalizzazione → float64 in [0, 1]
+  │
+  └─ 6. Correzione inclinazione (se |θ| ≥ 0.5°)
+         · scipy_rotate(image, -θ, order=1, mode='constant', cval=0.0)
+         · clip finale in [0, 1]
 ```
+
+> **Nota:** la validazione (step 2–3) avviene sull'immagine originale a piena risoluzione. Solo le immagini che superano i controlli vengono ridimensionate. La correzione tilt (step 6) opera sull'immagine già ridimensionata a 256×256.
+
+#### Scarto vs correzione del tilt
+
+Le due operazioni riguardano **immagini diverse**:
+
+| Operazione | Soglia | Cosa succede |
+|---|---|---|
+| **Scarto** (`is_valid_image`) | `\|θ\| > 10°` | Inclinazione grave → irrecuperabile, rimossa dal dataset |
+| **Correzione** (`correct_tilt`) | `0.5° ≤ \|θ\| ≤ 10°` | Inclinazione lieve → raddrizzata automaticamente |
+| **Nessuna azione** | `\|θ\| < 0.5°` | Già correttamente orientata |
 
 #### Correzione dell'inclinazione (Tilt Detection)
 
@@ -379,15 +405,13 @@ Si addestrano e confrontano due classificatori (**KNN** con k=5 e **Logistic Reg
 
 Si applica la SVD troncata **a ogni singola immagine** per comprimerla, poi si classificano i 65.536 pixel ricostruiti.
 
-| Scenario | Dati memorizzati | Dim. al KNN |
+| Scenario | Dati memorizzati | Dim. al classificatore |
 |---|---|---|
 | **Raw Pixels** | 100% | 65.536 |
-| **SVD k=5** | ~3.9% | 65.536 |
 | **SVD k=10** | ~7.8% | 65.536 |
-| **SVD k=20** | ~15.7% | 65.536 |
 | **SVD k=50** | ~39.1% | 65.536 |
 
-**Messaggio:** la SVD rimuove rumore ad alta frequenza senza perdere informazione diagnostica.
+**Messaggio:** la SVD rimuove rumore ad alta frequenza senza perdere informazione diagnostica. Con k=10 (~8% dei dati) si mantengono performance competitive con i pixel grezzi.
 
 #### Strategia 2: PCA — Riduzione Dimensionale del Dataset
 
@@ -396,10 +420,7 @@ Si applica PCA **all'intero dataset** (matrice 320×65.536) per estrarre le dire
 | Scenario | Componenti | Riduzione dim. |
 |---|---|---|
 | **Raw Pixels** | 65.536 | 0% |
-| **PCA (10)** | 10 | 99.98% |
 | **PCA (25)** | 25 | 99.96% |
-| **PCA (50)** | 50 | 99.92% |
-| **PCA (100)** | 100 | 99.85% |
 | **PCA (150)** | 150 | 99.77% |
 
 **Messaggio:** PCA agisce come feature extractor, selezionando le direzioni di massima varianza inter-immagine.
@@ -429,16 +450,22 @@ I due grafici affiancati mostrano che:
 
 ```
 Medical Image Compression and Analysis/
-├── config.py             # Parametri globali (percorsi, costanti, stile grafici)
-├── data_loader.py        # Caricamento, validazione, tilt correction (Fasi 1–2)
-├── svd_engine.py         # SVD, ricostruzione troncata, metriche MSE/PSNR (Fase 3)
-├── visualization.py      # Plot delle fasi 1, 2, 4
+├── main.py                      # Script orchestratore (esegue le 6 fasi)
+├── data/
+│   └── raw/                     # Dataset originale (non versionato)
+│       ├── Corona Virus Disease/
+│       ├── Normal/
+│       ├── Pneumonia/
+│       └── Tuberculosis/
 ├── src/
-│   ├── analysis.py       # Scree plot, MSE/PSNR, PCA, eigenfaces, tabella (Fase 5)
-│   └── classification.py # KNN, cross-validation, confronto feature (Fase 6)
-├── main.py               # Script orchestratore (esegue le 6 fasi)
-├── medical_image_svd_pca.ipynb   # Notebook interattivo
-└── output/               # Grafici salvati (.png, 150 dpi)
+│   ├── config.py                # Parametri globali (percorsi, costanti, stile grafici)
+│   ├── data_loader.py           # Caricamento, validazione, tilt correction (Fasi 1–2)
+│   ├── svd_engine.py            # SVD, ricostruzione troncata, metriche MSE/PSNR (Fase 3)
+│   ├── visualization.py         # Plot delle fasi 1, 2, 4
+│   ├── analysis.py              # Scree plot, MSE/PSNR, PCA, eigenfaces, tabella (Fase 5)
+│   └── classification.py        # KNN, cross-validation, confronto feature (Fase 6)
+├── output/                      # Grafici salvati (.png, 150 dpi)
+└── medical_image_svd_pca.ipynb  # Notebook interattivo
 ```
 
 ### Dipendenze principali
@@ -465,8 +492,8 @@ Medical Image Compression and Analysis/
 | `PCA_N_COMPONENTS` | `50` | Numero componenti PCA (analisi) |
 | `KNN_N_NEIGHBORS` | `5` | k per KNN classificazione |
 | `CV_N_FOLDS` | `5` | Fold per cross-validation stratificata |
-| `SVD_K_VALUES` | `[5, 10, 20, 50]` | k SVD per classificazione |
-| `PCA_COMPONENTS_LIST` | `[10, 25, 50, 100, 150]` | Componenti PCA per classificazione |
+| `SVD_K_VALUES` | `[10, 50]` | k SVD per classificazione |
+| `PCA_COMPONENTS_LIST` | `[25, 150]` | Componenti PCA per classificazione |
 
 ---
 

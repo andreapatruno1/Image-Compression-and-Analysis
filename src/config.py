@@ -10,7 +10,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # ─── Soppressione warning ─────────────────────────────────────────────────────
-warnings.filterwarnings('ignore')
+# Filtro ristretto: manteniamo visibili ConvergenceWarning e altri warning critici.
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 # ─── Percorsi ─────────────────────────────────────────────────────────────────
 # Recupera il percorso della cartella principale del progetto (un livello sopra src/)
@@ -32,6 +35,7 @@ SPLIT = ""                              # Lasciato vuoto perché le classi sono 
 MAX_PER_CLASS = 120                      # immagini per classe da caricare
 CORRECT_TILT = True                     # abilita correzione inclinazione
 MAX_TILT_ANGLE = 10                     # angolo massimo (gradi) oltre il quale l'immagine viene scartata
+CORNER_BRIGHTNESS_THRESHOLD = 130       # soglia (0-255) per rilevare angoli chiari da padding corrotto
 
 # ─── Parametri SVD ────────────────────────────────────────────────────────────
 K_VALUES_DEMO = [1, 5, 10, 20, 50, 100, 200]       # k per la griglia di ricostruzione

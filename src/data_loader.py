@@ -1,4 +1,4 @@
-f"""
+"""
 data_loader.py -- Fase 1 & 2: Esplorazione e Pre-elaborazione dei Dati.
 
 Funzioni per caricare, verificare e pre-elaborare le immagini radiografiche.
@@ -6,12 +6,13 @@ Include il rilevamento e la correzione automatica dell'inclinazione (tilt).
 """
 
 import os
+from typing import Optional
 import numpy as np
 from PIL import Image
 from scipy.ndimage import rotate as scipy_rotate
 
 from .config import (DATASET_DIR, CLASSES, TARGET_SIZE, SPLIT, MAX_PER_CLASS,
-                     CORRECT_TILT, MAX_TILT_ANGLE)
+                     CORRECT_TILT, MAX_TILT_ANGLE, CORNER_BRIGHTNESS_THRESHOLD)
 
 
 # ===========================================================================
@@ -68,7 +69,8 @@ def load_sample_images(split: str = SPLIT) -> dict[str, np.ndarray]:
         folder = os.path.join(DATASET_DIR, split, cls)
         files = _image_files(folder)
         for f in files:
-            img = Image.open(os.path.join(folder, f)).convert('L')
+            with Image.open(os.path.join(folder, f)) as _img:
+                img = _img.convert('L')
             arr = np.array(img)
             if not is_lateral_xray(arr):
                 valid, _ = is_valid_image(arr, filename=f)
@@ -213,7 +215,7 @@ def detect_tilt_angle(image: np.ndarray, search_range: float = 25.0,
     return best_angle
 
 
-def correct_tilt(image: np.ndarray, angle: float = None) -> tuple[np.ndarray, float]:
+def correct_tilt(image: np.ndarray, angle: Optional[float] = None) -> tuple[np.ndarray, float]:
     """
     Corregge l'inclinazione di un'immagine ruotandola.
 
@@ -247,7 +249,7 @@ KNOWN_CORRUPT_FILES = {
     "1078.jpg", "1099.jpg", "1100.jpg", "1132.jpg", "1133.jpg", "145.jpg"
 }
 
-def is_valid_image(image: np.ndarray, max_tilt: float = MAX_TILT_ANGLE, filename: str = None) -> tuple[bool, float]:
+def is_valid_image(image: np.ndarray, max_tilt: float = MAX_TILT_ANGLE, filename: Optional[str] = None) -> tuple[bool, float]:
     """
     Verifica se un'immagine e' valida (non troppo inclinata e non corrotta da padding).
 
@@ -274,8 +276,8 @@ def is_valid_image(image: np.ndarray, max_tilt: float = MAX_TILT_ANGLE, filename
     bl = img_255[-margin:, :margin].mean()
     br = img_255[-margin:, -margin:].mean()
     
-    # Se 3 o 4 angoli sono molto chiari (>130), l'immagine è corrotta/paddata
-    bright_corners = sum([1 for x in [tl, tr, bl, br] if x > 130])
+    # Se 3 o 4 angoli sono molto chiari, l'immagine è corrotta/paddata
+    bright_corners = sum(1 for x in (tl, tr, bl, br) if x > CORNER_BRIGHTNESS_THRESHOLD)
     if bright_corners >= 3:
         return False, 99.0  # Identificato come tilt artificiale grave
 
@@ -292,8 +294,8 @@ def load_and_preprocess(
     path: str,
     target_size: tuple = TARGET_SIZE,
     apply_tilt_correction: bool = CORRECT_TILT,
-    pil_image: Image.Image = None,
-    angle: float = None
+    pil_image: Optional[Image.Image] = None,
+    angle: Optional[float] = None
 ) -> tuple[np.ndarray, float]:
     """
     Carica un'immagine, la converte in scala di grigi, corregge l'inclinazione
@@ -320,7 +322,8 @@ def load_and_preprocess(
     if pil_image is not None:
         img = pil_image
     else:
-        img = Image.open(path).convert('L')
+        with Image.open(path) as _raw:
+            img = _raw.convert('L')
     img = img.resize(target_size, Image.LANCZOS)
     arr = np.array(img, dtype=np.float64) / 255.0
 
@@ -369,7 +372,8 @@ def load_dataset(
             filepath = os.path.join(folder, f)
 
             # Carica l'immagine una sola volta
-            raw = Image.open(filepath).convert('L')
+            with Image.open(filepath) as _raw:
+                raw = _raw.convert('L')
             raw_arr = np.array(raw)
 
             # Controlla se è una radiografia laterale (prima del preprocessing)
@@ -434,7 +438,8 @@ def load_raw_samples(
             if len(samples) >= n_samples:
                 break
             filepath = os.path.join(folder, f)
-            raw = Image.open(filepath).convert('L')
+            with Image.open(filepath) as _raw:
+                raw = _raw.convert('L')
             raw_arr = np.array(raw)
             # Salta le laterali
             if is_lateral_xray(raw_arr):

@@ -13,8 +13,11 @@ Metriche: accuracy, precision, recall, F1 (macro), AUC-ROC (OvR).
 """
 
 import os
+from typing import Callable, Optional
 import numpy as np
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+from sklearn.base import clone
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
