@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="516d937d-e345-42f4-834f-505a0121b45d" name="Changes" comment="Aggiunta del file di analisi">
+      <change beforePath="$PROJECT_DIR$/.idea/Medical Image Compression and Analysis.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/Medical Image Compression and Analysis.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/SVD e PCA per l'analisi di immagini mediche.pptx" beforeDir="false" afterPath="$PROJECT_DIR$/docs/SVD e PCA per l'analisi di immagini mediche.pptx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/medical_image_svd_pca.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/medical_image_svd_pca.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/fase1_esplorazione.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/fase1_esplorazione.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/fase2_correzione_tilt.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/fase2_correzione_tilt.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/fase4_confronto_classi.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/fase4_confronto_classi.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/fase4_ricostruzione_svd.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/fase4_ricostruzione_svd.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/fase5_eigenfaces.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/fase5_eigenfaces.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/fase5_scree_plot.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/fase5_scree_plot.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pca_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pca_engine.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FlaskConsoleOptions" custom-start-script="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))">
+    <envs>
+      <env key="FLASK_APP" value="app" />
+    </envs>
+    <option name="myCustomStartScript" value="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))" />
+    <option name="myEnvs">
+      <map>
+        <entry key="FLASK_APP" value="app" />
+      </map>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;andreapatruno1&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/andreapatruno1/Image-Compression-and-Analysis.git",
+    "accountId": "7e156a05-5675-4b5b-b37f-888b2c073c54"
+  }
+}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="3AUJaOaH1FDwtS776Qwm1GncEO9" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.config.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.medical_image_svd_pca.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/1/OneDrive - Politecnico di Bari/POLIBA/1 anno/1 semestre/statistical metods/progetto/Medical Image Compression and Analysis&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.updates&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\1\OneDrive - Politecnico di Bari\POLIBA\1 anno\1 semestre\statistical metods\progetto\Medical Image Compression and Analysis" />
+      <recent name="C:\Users\1\OneDrive - Politecnico di Bari\POLIBA\1 anno\1 semestre\statistical metods\progetto\Medical Image Compression and Analysis\notebook" />
+      <recent name="C:\Users\1\OneDrive - Politecnico di Bari\POLIBA\1 anno\1 semestre\statistical metods\progetto\Medical Image Compression and Analysis\script_test" />
+      <recent name="C:\Users\1\OneDrive - Politecnico di Bari\POLIBA\1 anno\1 semestre\statistical metods\progetto\Medical Image Compression and Analysis\src" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23339.19" />
+        <option value="bundled-python-sdk-0029f7779945-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23339.19" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="516d937d-e345-42f4-834f-505a0121b45d" name="Changes" comment="" />
+      <created>1760199946312</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1760199946312</updated>
+      <workItem from="1760199947381" duration="300000" />
+      <workItem from="1772641279728" duration="1448000" />
+      <workItem from="1773410970322" duration="2078000" />
+      <workItem from="1774005760227" duration="4355000" />
+      <workItem from="1774204834036" duration="15000" />
+      <workItem from="1774204851725" duration="560000" />
+      <workItem from="1774205424018" duration="624000" />
+      <workItem from="1774206060125" duration="354000" />
+      <workItem from="1774206422916" duration="1803000" />
+      <workItem from="1774278205954" duration="159000" />
+      <workItem from="1774866568504" duration="432000" />
+      <workItem from="1774867275733" duration="1818000" />
+      <workItem from="1774881053978" duration="2756000" />
+      <workItem from="1776091864234" duration="3974000" />
+      <workItem from="1776102318376" duration="3647000" />
+      <workItem from="1776151801905" duration="8094000" />
+      <workItem from="1776173076089" duration="4624000" />
+    </task>
+    <task id="LOCAL-00001" summary="Aggiunta del file di analisi">
+      <option name="closed" value="true" />
+      <created>1774204898169</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1774204898169</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Aggiunta del file di analisi">
+      <option name="closed" value="true" />
+      <created>1774221187832</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1774221187832</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Aggiunta del file di analisi" />
+    <option name="LAST_COMMIT_MESSAGE" value="Aggiunta del file di analisi" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/Medical_Image_Compression_and_Analysis$config.coverage" NAME="config Coverage Results" MODIFIED="1773411769601" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Medical_Image_Compression_and_Analysis$medical_image_svd_pca.coverage" NAME="medical_image_svd_pca Coverage Results" MODIFIED="1774881355652" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Medical_Image_Compression_and_Analysis$main.coverage" NAME="main Coverage Results" MODIFIED="1774006914521" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>

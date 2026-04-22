@@ -17,10 +17,9 @@
 4. [Pipeline di Analisi](#4-pipeline-di-analisi)
    - 4.1 [Fase 1 — Esplorazione dei Dati](#41-fase-1--esplorazione-dei-dati)
    - 4.2 [Fase 2 — Pre-elaborazione](#42-fase-2--pre-elaborazione)
-   - 4.3 [Fase 3 — SVD (Motore Matematico)](#43-fase-3--svd-motore-matematico)
-   - 4.4 [Fase 4 — Ricostruzione e Visualizzazione](#44-fase-4--ricostruzione-e-visualizzazione)
-   - 4.5 [Fase 5 — Analisi Statistica e PCA](#45-fase-5--analisi-statistica-e-pca)
-   - 4.6 [Fase 6 — Classificazione e Confronto Feature](#46-fase-6--classificazione-e-confronto-feature)
+   - 4.3 [Fase 3 — SVD: Decomposizione, Ricostruzione e Analisi](#43-fase-3--svd-decomposizione-ricostruzione-e-analisi)
+   - 4.4 [Fase 4 — PCA: Riduzione Dimensionale sul Dataset](#44-fase-4--pca-riduzione-dimensionale-sul-dataset)
+   - 4.5 [Fase 6 — Classificazione: SVD Compressione vs PCA Riduzione Dimensionale](#45-fase-6--classificazione-svd-compressione-vs-pca-riduzione-dimensionale)
 5. [Architettura del Codice](#5-architettura-del-codice)
 6. [Discussione Critica](#6-discussione-critica)
 7. [Conclusioni](#7-conclusioni)
@@ -139,7 +138,7 @@ La PCA cerca le direzioni di **massima varianza** nello spazio delle immagini. A
 2. Si centra: $\tilde{X} = X - \bar{X}$
 3. La PCA trova le componenti principali $\mathbf{v}_1, \mathbf{v}_2, \ldots$ che massimizzano $\operatorname{Var}(\tilde{X} \mathbf{v}_i)$ con vincolo di ortogonalità
 
-#### Implementazione (src/analysis.py)
+#### Implementazione (src/pca_engine.py)
 
 ```python
 X = all_images.reshape(all_images.shape[0], -1)  # (N, 65536)
@@ -277,9 +276,11 @@ $$\theta^* = \arg\max_\theta \operatorname{Var}\!\left(\nabla_\text{row}\left[\t
 
 ---
 
-### 4.3 Fase 3 — SVD (Motore Matematico)
+### 4.3 Fase 3 — SVD: Decomposizione, Ricostruzione e Analisi
 
-**Obiettivo:** applicare la SVD a una singola immagine campione e comprendere la struttura della decomposizione.
+**Obiettivo:** applicare la SVD a immagini singole — dalla decomposizione matematica fino all'analisi statistica completa delle quattro classi diagnostiche.
+
+#### 3.1 Demo SVD su una singola immagine
 
 ```python
 U, S, Vt = np.linalg.svd(image_matrix, full_matrices=False)
@@ -295,11 +296,7 @@ Per un'immagine 256 × 256, la SVD economica produce:
 - **Decadimento rapido:** dopo i primi 10–15, i valori singolari sono prossimi a zero
 - 90% della varianza spiegata in pochissime componenti (k ≈ 1–3)
 
----
-
-### 4.4 Fase 4 — Ricostruzione e Visualizzazione
-
-#### 4.4.1 Ricostruzione a diversi livelli di k
+#### 3.2 Ricostruzione a diversi livelli di k
 
 Valori di $k$ analizzati: `[1, 5, 10, 20, 50, 100, 200]`
 
@@ -323,7 +320,7 @@ Questo evita 200 moltiplicazioni matriciali complete.
 
 ![Fase 4 — Ricostruzione SVD con diversi k](output/fase4_ricostruzione_svd.png)
 
-#### 4.4.2 Confronto tra classi
+#### 3.3 Confronto tra classi
 
 Valori di $k$ per il confronto: `[5, 20, 50, 100]`
 
@@ -335,9 +332,7 @@ Pneumonia e Tuberculosis raggiungono PSNR leggermente più alti a parità di $k$
 
 ---
 
-### 4.5 Fase 5 — Analisi Statistica e PCA
-
-#### 5.1 Scree Plot e Decadimento dei Valori Singolari
+#### 3.4 Scree Plot e Decadimento dei Valori Singolari
 
 Tutte le classi mostrano lo stesso pattern di decadimento rapido:
 
@@ -352,7 +347,7 @@ Le radiografie polmonari hanno una **fortissima struttura di basso rango**: il 9
 
 ![Fase 5 — Scree plot](output/fase5_scree_plot.png)
 
-#### 5.2 Curve MSE e PSNR vs k
+#### 3.5 Curve MSE e PSNR vs k
 
 - **MSE:** decresce rapidamente fino a $k \approx 20$–30, poi si stabilizza
 - **PSNR:** cresce logaritmicamente; il "punto di gomito" è a $k \approx 20$–50
@@ -360,7 +355,11 @@ Le radiografie polmonari hanno una **fortissima struttura di basso rango**: il 9
 
 ![Fase 5 — MSE e PSNR vs k](output/fase5_mse_psnr.png)
 
-#### 5.3 PCA — Proiezione 2D e Separabilità
+---
+
+### 4.4 Fase 4 — PCA: Riduzione Dimensionale sul Dataset
+
+#### 4.1 Scatter Plot PCA 2D e Separabilità
 
 ```python
 X = all_images.reshape(N, -1)    # (N, 65536)
@@ -379,70 +378,101 @@ X_pca = pca_model.fit_transform(X)
 
 ![Fase 5 — PCA scatter plot](output/fase5_pca_scatter.png)
 
-#### 5.4 Eigenfaces (Eigen-Xrays)
+#### 4.2 Eigenfaces (Eigen-Xrays)
 
-Le prime 10 componenti principali, visualizzate come immagini 256 × 256 con colormap divergente (RdBu):
+Ogni componente principale è un vettore di 65.536 coefficienti (uno per pixel), che ridisegnato come matrice 256×256 prende il nome di **Eigen-Xray**.
 
-| Componente | Varianza | Pattern clinico |
+##### Come leggere la colormap (RdBu)
+
+È fondamentale capire che questi non sono immagini di intensità luminosa: sono **direzioni nello spazio dei pixel**. Ogni pixel ha un coefficiente che può essere positivo, negativo o nullo:
+
+| Colore | Coefficiente | Significato |
 |---|---|---|
-| **PC1** | 25.6% | Contrasto globale — rx chiare vs scure |
-| **PC2** | 17.4% | Simmetria laterale — profilo destro/sinistro |
-| **PC3** | 5.1% | Pattern mediastinico |
-| **PC4** | 4.8% | Strutture costali |
-| **PC5–10** | 1.6–3.9% | Dettagli fini: campi polmonari, diaframma, apici |
+| **Rosso intenso** | Fortemente positivo | Quell'area è più luminosa della media nelle immagini con alto punteggio su questa PC |
+| **Bianco / grigio** | Vicino a zero | Quell'area non discrimina le immagini lungo questa direzione — irrilevante |
+| **Blu intenso** | Fortemente negativo | Quell'area è più scura della media nelle immagini con alto punteggio su questa PC |
 
-![Fase 5 — Eigen-Xrays](output/fase5_eigenfaces.png)
+> "Più rossa" non significa "più importante come componente" — la componente principale è l'**intera immagine**. Il colore indica in quale direzione e con quale intensità quel singolo pixel contribuisce a distinguere le radiografie lungo quella direzione.
+
+In pratica: se un'immagine ha un punteggio PCA alto su PC1, significa che le sue zone rosse sono più luminose e le sue zone blu sono più scure rispetto alla media del dataset.
+
+##### Interpretazione clinica delle prime 10 PC
+
+| Componente | Varianza | Pattern anatomico | Cosa discrimina |
+|---|---|---|---|
+| **PC1** | 23.5% | Centro rosso (polmoni/mediastino), bordi blu | Contrasto globale: rx chiare vs scure, luminosità del campo polmonare |
+| **PC2** | 17.6% | Asimmetria sinistra/destra | Lateralizzazione: differenze tra emitorace destro e sinistro |
+| **PC3** | 5.0% | Struttura mediastinica centrale | Ampiezza e densità del mediastino |
+| **PC4** | 4.5% | Archi costali superiori | Pattern delle coste e degli apici polmonari |
+| **PC5** | 4.1% | Campi polmonari inferiori | Densità delle basi polmonari (addensamenti vs aria) |
+| **PC6** | 3.8% | Bordi laterali del torace | Profilo della gabbia toracica |
+| **PC7** | 3.0% | Strutture ilari | Ilo polmonare e vasi centrali |
+| **PC8** | 2.3% | Diaframma e angoli costofrenici | Posizione del diaframma e versamenti |
+| **PC9** | 2.0% | Apici e zona sub-clavicolare | Lesioni apicali (tipiche della TB) |
+| **PC10** | 1.6% | Dettagli fini diffusi | Texture fine del parenchima polmonare |
+
+Le prime 2 componenti da sole spiegano oltre il **41% della varianza totale** e corrispondono a variazioni macroscopiche (luminosità globale e simmetria). Le componenti successive catturano strutture anatomiche sempre più locali e specifiche — alcune diagnosticamente rilevanti come gli apici (PC9, tipico della tubercolosi) o le basi (PC5, tipico della polmonite).
+
+![Fase 4 — Eigen-Xrays](output/fase5_eigenfaces.png)
 
 ---
 
-### 4.6 Fase 6 — Classificazione e Confronto Feature
+### 4.5 Fase 6 — Classificazione: Confronto SVD Compressione vs PCA Riduzione Dimensionale
 
-**Obiettivo:** validare quantitativamente che la compressione (SVD) e la riduzione dimensionale (PCA) **preservano la capacità diagnostica** confrontandole con la classificazione sui pixel grezzi.
+**Obiettivo:** validare quantitativamente se SVD e PCA preservano l'informazione diagnostica, usando due classificatori (**KNN k=5** e **Logistic Regression**) con **Stratified 5-Fold Cross-Validation**.
 
-Si addestrano e confrontano due classificatori (**KNN** con k=5 e **Logistic Regression**) usando una **Stratified 5-Fold Cross-Validation**, organizzati in due strategie distinte:
+#### Strategia A — SVD: Test della compressione diagnostica (per-immagine)
 
-#### Strategia 1: SVD — Compressione dell'Immagine
+Per ogni immagine $A$ si calcola la ricostruzione troncata $A_k = U_k \Sigma_k V_k^T$ e si usa come input al classificatore (appiattita a 65.536 feature). Il classificatore vede i pixel ricostruiti senza sapere che l'immagine è compressa.
 
-Si applica la SVD troncata **a ogni singola immagine** per comprimerla, poi si classificano i 65.536 pixel ricostruiti.
+```
+Immagine A (256×256)
+    → U, S, Vt = svd(A)
+    → A_k = U[:,:k] @ diag(S[:k]) @ Vt[:k,:]   # ricostruzione rango-k
+    → flatten → 65.536 feature
+    → KNN / Logistic Regression
+```
 
-| Scenario | Dati memorizzati | Dim. al classificatore |
+| Scenario | Dati memorizzati | Formula storage |
 |---|---|---|
-| **Raw Pixels** | 100% | 65.536 |
-| **SVD k=10** | ~7.8% | 65.536 |
-| **SVD k=50** | ~39.1% | 65.536 |
+| **Raw Pixels** | 100% | $256 \times 256 = 65.536$ scalari |
+| **SVD k=10** | **7.8%** | $(2 \cdot 256 + 1) \cdot 10 = 5.130$ scalari |
+| **SVD k=25** | **19.6%** | $(2 \cdot 256 + 1) \cdot 25 = 12.825$ scalari |
+| **SVD k=50** | **39.1%** | $(2 \cdot 256 + 1) \cdot 50 = 25.650$ scalari |
 
-**Messaggio:** la SVD rimuove rumore ad alta frequenza senza perdere informazione diagnostica. Con k=10 (~8% dei dati) si mantengono performance competitive con i pixel grezzi.
+> **Tesi verificata:** se accuracy(SVD k) ≈ accuracy(Raw) → la compressione è **diagnosticamente lossless**. L'alta frequenza rimossa non contiene informazione clinicamente rilevante. La verifica è statistica: dato che le deviazioni standard (~5%) sono molto superiori alle differenze di accuracy tra scenari SVD e baseline, le performance sono da intendersi come equivalenti, non come superiori o inferiori.
 
-#### Strategia 2: PCA — Riduzione Dimensionale del Dataset
+#### Strategia B — PCA: Riduzione dimensionale del dataset
 
-Si applica PCA **all'intero dataset** (matrice 320×65.536) per estrarre le direzioni di massima varianza. Il KNN lavora nello spazio ridotto.
+La PCA è fittata **solo sul training set** di ogni fold (tramite `sklearn.Pipeline`) per evitare data leakage. Il classificatore lavora nello spazio ridotto a $k$ dimensioni.
 
-| Scenario | Componenti | Riduzione dim. |
+```
+Dataset X (N × 65.536)
+    → StandardScaler + PCA(k) fit sul training fold
+    → k coordinate PCA
+    → KNN / Logistic Regression
+```
+
+| Scenario | Feature originali | Feature dopo PCA | Riduzione |
+|---|---|---|---|
+| **Raw Pixels** | 65.536 | 65.536 | 0% |
+| **PCA k=10** | 65.536 | **10** | 99.98% |
+| **PCA k=25** | 65.536 | **25** | 99.96% |
+| **PCA k=50** | 65.536 | **50** | 99.92% |
+
+> **Osservazione:** con k=25 e k=50 la PCA mantiene performance vicine alla baseline (83–83.4% vs 85.1%), confermando che la struttura discriminativa è concentrata nelle prime componenti. Con k=10 l'accuracy scende a 78.8% con LR, mostrando che 10 componenti non sono sufficienti a linearizzare la separazione tra le 4 classi — il dato è però recuperato da KNN (83.0%), che è più robusto in spazi di bassa dimensionalità.
+
+#### Le due strategie sono complementari
+
+| | SVD (Strategia A) | PCA (Strategia B) |
 |---|---|---|
-| **Raw Pixels** | 65.536 | 0% |
-| **PCA (25)** | 25 | 99.96% |
-| **PCA (150)** | 150 | 99.77% |
+| **Opera su** | Singola immagine | Intero dataset |
+| **Feature al classif.** | 65.536 pixel ricostruiti | $k$ coordinate PCA |
+| **Domanda** | "La compressione non degrada la diagnosi?" | "Bastano $k$ numeri per classificare?" |
 
-**Messaggio:** PCA agisce come feature extractor, selezionando le direzioni di massima varianza inter-immagine.
+![Fase 6 — Hero chart SVD vs PCA](output/fase5_hero_tradeoff.png)
 
-> **Nota metodologica:** per evitare **data leakage**, `StandardScaler` e `PCA` vengono fittati solo sul training set di ogni fold tramite `sklearn.Pipeline`.
-
-#### Risultati
-
-La **Logistic Regression** ha dimostrato un primato assoluto rispetto al KNN, superando i limiti della distanza euclidea nello spazio dei pixel. 
-- La baseline (Raw Pixels) con Logistic Regression si attesta intorno all'**85.1%** di accuratezza.
-- **Miglior Scenario Assoluto:** PCA con 150 componenti fornite alla Logistic Regression raggiunge l'**86.1%** di accuratezza.
-- Con la compressione estrema della SVD (k=5, 4% dei dati), la Logistic Regression migliora le performance sfiorando l'**85.7%**, dimostrando l'effetto di denoising implicito della decomposizione singolare.
-
-![Fase 6 — Confronto metriche](output/fase6_classification_comparison.png)
-
-#### Hero Chart: Trade-off Compressione vs Diagnostica
-
-I due grafici affiancati mostrano che:
-- **SVD** (sinistra): comprimere le immagini fino al 96% (k=5) non degrada l'accuracy
-- **PCA** (destra): ridurre la dimensionalità del 99.96% (25 componenti) mantiene o migliora l'accuracy
-
-![Fase 6 — Hero chart](output/fase6_hero_tradeoff.png)
+![Fase 6 — Confronto metriche](output/fase5_classification_comparison.png)
 
 ---
 
@@ -461,9 +491,10 @@ Medical Image Compression and Analysis/
 │   ├── config.py                # Parametri globali (percorsi, costanti, stile grafici)
 │   ├── data_loader.py           # Caricamento, validazione, tilt correction (Fasi 1–2)
 │   ├── svd_engine.py            # SVD, ricostruzione troncata, metriche MSE/PSNR (Fase 3)
-│   ├── visualization.py         # Plot delle fasi 1, 2, 4
-│   ├── analysis.py              # Scree plot, MSE/PSNR, PCA, eigenfaces, tabella (Fase 5)
-│   └── classification.py        # KNN, cross-validation, confronto feature (Fase 6)
+│   ├── visualization.py         # Plot delle fasi 1, 2, 3
+│   ├── analysis.py              # Scree plot, MSE/PSNR, tabella riassuntiva (Fase 3)
+│   ├── pca_engine.py            # PCA, scatter plot, eigenfaces (Fase 4)
+│   └── classification.py        # KNN, Logistic Regression, cross-validation (Fase 6)
 ├── output/                      # Grafici salvati (.png, 150 dpi)
 └── medical_image_svd_pca.ipynb  # Notebook interattivo
 ```
@@ -492,8 +523,9 @@ Medical Image Compression and Analysis/
 | `PCA_N_COMPONENTS` | `50` | Numero componenti PCA (analisi) |
 | `KNN_N_NEIGHBORS` | `5` | k per KNN classificazione |
 | `CV_N_FOLDS` | `5` | Fold per cross-validation stratificata |
-| `SVD_K_VALUES` | `[10, 50]` | k SVD per classificazione |
-| `PCA_COMPONENTS_LIST` | `[25, 150]` | Componenti PCA per classificazione |
+| `SVD_K_FEATURES` | `[10, 25, 50]` | k per ricostruzione SVD rank-k (classificazione) |
+| `PCA_COMPONENTS_LIST` | `[10, 25, 50]` | Componenti PCA per classificazione |
+| `SVD_K_VALUES` | `[10, 50]` | k per visualizzazione ricostruzione (Fase 4) |
 
 ---
 
@@ -509,9 +541,9 @@ Medical Image Compression and Analysis/
 
 4. **Il pre-processing è robusto.** Il sistema di validazione a più livelli (laterali, tilt eccessivo, padding corrotto, file noti) garantisce che solo immagini valide entrino nell'analisi.
 
-5. **La SVD preserva e migliora la capacità diagnostica.** La classificazione su pixel ricostruiti con SVD troncata estrema (k=5, k=10) sfiora l'**85.7%** con la Logistic Regression, battendo leggermente la baseline sui raw pixels. Elimininare l'alta frequenza agisce come potente filtro anti-rumore diagnostico.
+5. **La SVD preserva la capacità diagnostica con un decimo dei dati.** La classificazione su pixel ricostruiti con SVD troncata a $k = 10$ (solo **7.8% dello storage**) raggiunge **85.3%** di accuracy con Logistic Regression — statisticamente equivalente alla baseline Raw Pixels (85.1%). La differenza di 0.2 punti percentuali è inferiore alla deviazione standard (~5%) e non è statisticamente significativa: la narrativa corretta è che la compressione è **diagnosticamente lossless**, non che superi la baseline. L'alta frequenza rimossa non conteneva informazione clinicamente rilevante.
 
-6. **La Logistic Regression scala linearmente superando la Maledizione della Dimensionalità.** Al contrario del KNN (che collassa dopo le prime componenti PCA), la Logistic Regression impara ad assegnare pesi proporzionali sfruttando sempre più varianza; con 150 componenti PCA ottiene l'**86.1%**, massimizzando la differenziazione clinica.
+6. **La PCA estrae informazione discriminativa in dimensioni ridottissime.** Con sole **25 componenti principali** (99.96% di riduzione della dimensionalità) la Logistic Regression raggiunge **83.4%** di accuracy, a soli 1.7 punti percentuali dalla baseline a 65.536 feature — un divario ampiamente giustificato dalla drastica riduzione dimensionale. Con **50 componenti** il gap si riduce ulteriormente (83.2% vs 85.1%). Con sole **10 componenti**, tuttavia, l'accuracy scende a **78.8%** con LR (pur tenendo a 83.0% con KNN): un numero così ridotto di componenti non è sufficiente a linearizzare la separazione tra le 4 classi, mentre KNN — operando su distanze nello spazio ridotto — è più robusto a questa limitazione.
 
 ### Limitazioni
 
@@ -542,7 +574,9 @@ Medical Image Compression and Analysis/
 | **PCA = SVD su dati centrati** | Stessa base matematica, obiettivi complementari |
 | **Le eigenfaces rivelano pattern anatomo-clinici** | PC1: contrasto, PC2: simmetria, PC3: mediastino |
 | **PCA mostra separabilità parziale tra classi** | COVID-19/TB vs Normal/Pneumonia si separano su PC1; sovrapposizione residua |
-| **SVD + LogReg battono i pixel grezzi** | Classificazione su pixel compressi (k=5) → accuracy **85.7%**, superiore alla baseline degli 85.1% Raw Pixels |
-| **PCA è il feature extractor clinico ideale** | 150 componenti → accuracy massima dell'**86.1%** aggirando il Curse of Dimensionality del KNN |
+| **SVD compressione diagnosticamente lossless** | SVD k=10 (7.8% storage) → accuracy **85.3%** con LR, statisticamente equivalente alla baseline (85.1%, ±5%). La differenza di 0.2pp è inferiore alla deviazione standard: le performance sono indistinguibili |
+| **Oltre k=10 la SVD non porta miglioramenti** | SVD k=25 (84.7%) e k=50 (84.9%) con LR: aumentare il rango non recupera accuracy, confermando che l'informazione diagnostica è concentrata nelle prime componenti |
+| **PCA riduzione dimensionale efficace da k=25** | 25 componenti (99.96% riduzione) → accuracy **83.4%** con LR; 50 componenti → **83.2%**. Il gap rispetto alla baseline è modesto e giustificato dalla drastica riduzione |
+| **PCA k=10 insufficiente per LR, accettabile per KNN** | LR: 78.8% (−6.3pp dalla baseline); KNN: 83.0% (−0.2pp). 10 componenti non linearizzano le 4 classi, ma preservano le strutture di distanza utili a KNN |
 | **Il pre-processing è critico** | Senza correzione tilt e filtraggio, i risultati PCA sarebbero degradati |
 

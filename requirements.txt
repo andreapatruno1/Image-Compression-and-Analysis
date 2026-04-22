@@ -4,4 +4,3 @@ Pillow
 scikit-learn
 scipy
 jupyter
-seaborn

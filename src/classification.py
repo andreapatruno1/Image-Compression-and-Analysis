@@ -1,10 +1,17 @@
 """
 classification.py -- Fase 6: Classificazione e Confronto Feature.
 
-Classificazione KNN e Logistic Regression su scenari multipli:
-  1. Raw Pixels      (65 536 feature)  -- baseline
-  2. PCA  n comp.    (n feature)       -- riduzione dimensionale
-  3. SVD k           (65 536 feature)  -- compressione immagine
+Confronto SVD (compressione rank-k) vs PCA (riduzione dimensionale):
+  Baseline:      Raw Pixels (65 536 feature)
+  Strategia A:   SVD — ricostruzione A_k = U_k @ diag(S_k) @ Vk.T
+                 Il classificatore riceve i 65.536 pixel ricostruiti.
+                 Domanda: "La compressione rank-k è diagnosticamente lossless?"
+  Strategia B:   PCA — k coordinate principali (proiezione sul dataset)
+                 Il classificatore riceve k feature compatte.
+                 Domanda: "Bastano k componenti per classificare?"
+
+Le due strategie rispondono a domande diverse e non sono confrontabili
+in termini di dimensionalità delle feature (65.536 vs k).
 
 Usa sklearn Pipeline per evitare data leakage: StandardScaler e PCA vengono
 fittati SOLO sul training set di ogni fold.
@@ -29,7 +36,7 @@ from sklearn.preprocessing import LabelBinarizer, StandardScaler
 
 from .config import (CLASSES, CLASS_COLORS, OUTPUT_DIR,
                      KNN_N_NEIGHBORS, CV_N_FOLDS, RANDOM_STATE,
-                     SVD_K_VALUES, PCA_COMPONENTS_LIST,
+                     SVD_K_FEATURES, SVD_K_VALUES, PCA_COMPONENTS_LIST,
                      LR_MAX_ITER, LR_C)
 from .svd_engine import apply_svd, reconstruct_svd
 
@@ -76,7 +83,15 @@ def _classifier_label(classifier: str) -> str:
 
 
 def _svd_reconstruct_batch(all_images, k):
-    """Ricostruisce tutte le immagini con SVD troncata a rango k."""
+    """Ricostruisce tutte le immagini con SVD troncata a rango k (Eckart-Young).
+
+    Per ogni immagine A: A_k = U_k @ diag(S_k) @ Vk.T
+    Output shape: (N, 256*256) — pixel ricostruiti appiattiti.
+
+    Strategia A della classificazione: il classificatore riceve i pixel
+    ricostruiti, non feature SVD estratte. Questo testa se la compressione
+    rank-k è diagnosticamente lossless.
+    """
     N = all_images.shape[0]
     svd_images = []
     for i in range(N):
@@ -95,19 +110,32 @@ def prepare_feature_sets(
     labels: np.ndarray,
     classifier: str = 'knn',
     svd_cache: dict = None,
-    pca_model=None,
-    X_pca: np.ndarray = None,
 ) -> dict[str, tuple[np.ndarray, Pipeline]]:
     """
-    Prepara gli scenari per la classificazione.
+    Prepara gli scenari per il confronto SVD vs PCA con analisi del costo.
+
+    Baseline:    Raw Pixels (N, H*W)
+
+    Strategia A — SVD spaziale (U·S·V^T):
+        Per ogni immagine estrae sigma_i * u_i e sigma_i * v_i per i=1..k.
+        Output: (N, 2*H*k) — cattura informazione spaziale locale.
+        Costo: 2·256·k feature per classificatore (cresce linearmente con k).
+
+    Strategia B — PCA globale:
+        Proietta il dataset sulle prime k componenti principali.
+        Output: (N, k) — descrittore globale inter-immagine.
+        Costo: k feature per classificatore (molto più compatto).
+
+    Differenza di costo esplicitata nel log di preparazione:
+        Stessa k strutturale (rango della decomposizione), dimensionalità
+        finale diversa — parte integrante del confronto.
 
     Parameters
     ----------
-    all_images : array di immagini (N, H, W)
+    all_images : array (N, H, W)
     labels     : etichette
     classifier : 'knn' o 'lr'
-    svd_cache  : dict opzionale per cachare le ricostruzioni SVD
-                 (evita di ricalcolare quando si eseguono più classificatori)
+    svd_cache  : dict per cachare le feature SVD tra i due classificatori
 
     Returns
     -------
@@ -116,36 +144,58 @@ def prepare_feature_sets(
     pipe_fn = _get_pipeline_fn(classifier)
     clf_label = _classifier_label(classifier)
 
-    N = all_images.shape[0]
+    N, H, W = all_images.shape
+    n_pixels = H * W
     X_flat = all_images.reshape(N, -1)
 
     scenarios = {}
 
-    # --- Raw Pixels ---
-    scenarios["Raw Pixels (65,536)"] = (X_flat, pipe_fn())
-    print(f"  [Raw Pixels]       shape: {X_flat.shape}  ({clf_label})")
+    # --- Baseline: Raw Pixels ---
+    scenarios["Raw Pixels"] = (X_flat, pipe_fn())
+    print(f"  [Baseline]  Raw Pixels        {n_pixels:>6} feat  ({clf_label})")
 
-    # --- PCA scenari ---
-    for n_comp in PCA_COMPONENTS_LIST:
-        name = f"PCA ({n_comp} comp.)"
-        scenarios[name] = (X_flat, pipe_fn(pca_n=n_comp))
-        print(f"  [{name}]     (Pipeline: Scaler -> PCA -> {clf_label})")
-
-    # --- SVD scenari ---
-    for k in SVD_K_VALUES:
-        # Usa la cache per evitare ricalcoli se già disponibili
-        if svd_cache is not None and k in svd_cache:
-            X_svd = svd_cache[k]
-            print(f"  [SVD k={k}]        (cache) shape: {X_svd.shape}  ({clf_label})")
+    # --- Strategia A: SVD — ricostruzione di rango k ---
+    # Filosofia: test della capacita' di compressione diagnostically-lossless.
+    # Per ogni immagine A: A_k = U[:,:k] * diag(S[:k]) * Vt[:k,:]
+    # Storage per immagine: (2*H + 1) * k scalari vs H*W originali.
+    # Risultato: immagini ricostruite di shape (H, W), flatten a H*W feature.
+    # Domanda scientifica: "Se comprimo con SVD a rango k, perdo informazione
+    # diagnostica?" — se l'accuracy si mantiene -> compressione lossless per
+    # il task di classificazione.
+    print(f"\n  -- Strategia A: SVD ricostruzione rango-k (immagine compressa) --")
+    for k in SVD_K_FEATURES:
+        cache_key = f"svd_rec_{k}"
+        # Calcolo percentuale di storage: (2*H + 1)*k su H*W
+        storage_pct = (2 * H + 1) * k / (H * W) * 100
+        if svd_cache is not None and cache_key in svd_cache:
+            X_svd = svd_cache[cache_key]
+            print(f"  [SVD k={k:2d}]  ricostr. ({storage_pct:.1f}% storage) -> {n_pixels:>6} feat  (cache)  ({clf_label})")
         else:
-            print(f"  [SVD k={k}]        ricostruzione...", end="", flush=True)
+            print(f"  [SVD k={k:2d}]  ricostr. ({storage_pct:.1f}% storage) -> {n_pixels:>6} feat  ricostruzione...",
+                  end="", flush=True)
             X_svd = _svd_reconstruct_batch(all_images, k)
-            print(f" shape: {X_svd.shape}  ({clf_label})")
+            print(" OK")
             if svd_cache is not None:
-                svd_cache[k] = X_svd
+                svd_cache[cache_key] = X_svd
 
-        name = f"SVD k={k} ({X_svd.shape[1]:,})"
-        scenarios[name] = (X_svd, pipe_fn())
+        # Pipeline: Scaler -> classificatore (niente PCA, immagine intera)
+        name = f"SVD k={k}"
+        scenarios[name] = (X_svd, pipe_fn(pca_n=None))
+
+    # --- Strategia B: PCA globale — k coordinate ---
+    print(f"\n  -- Strategia B: PCA globale (pixel -> PCA(k)) --")
+    for n_comp in PCA_COMPONENTS_LIST:
+        name = f"PCA k={n_comp}"
+        scenarios[name] = (X_flat, pipe_fn(pca_n=n_comp))
+        print(f"  [PCA k={n_comp:2d}]  65536 feat -> PCA({n_comp}) -> {n_comp} feat  "
+              f"(Pipeline: Scaler->PCA({n_comp})->{clf_label})")
+
+    print(f"\n  Riepilogo strategie (stesso classificatore, feature diverse):")
+    print(f"  {'k':>4} | {'SVD: storage compr.':>22} | {'PCA: dim finale':>18} | {'feat al classificatore':>22}")
+    print(f"  {'-'*74}")
+    for k in SVD_K_FEATURES:
+        storage_pct = (2 * H + 1) * k / (H * W) * 100
+        print(f"  {k:>4} | {storage_pct:>18.1f}% pixel | {k:>14} dim  | {n_pixels:>16,} feat (SVD) / {k} (PCA)")
 
     return scenarios
 
@@ -280,7 +330,7 @@ def plot_confusion_matrix(
                  fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, f'fase6_confusion_matrices{suffix}.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR, f'fase5_confusion_matrices{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -354,7 +404,7 @@ def plot_roc_curves(
                  fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, f'fase6_roc_curves{suffix}.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR, f'fase5_roc_curves{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -428,7 +478,7 @@ def plot_classification_comparison(
     plt.tight_layout()
     if save:
         plt.savefig(os.path.join(OUTPUT_DIR,
-                    f'fase6_classification_comparison{suffix}.png'),
+                    f'fase5_classification_comparison{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -442,167 +492,123 @@ def plot_hero_tradeoff(
     classifier: str = 'knn',
     save: bool = True
 ) -> None:
-    """Grafico 'eroe' a due pannelli, design pulito.
+    """Grafico 'eroe' — confronto simmetrico SVD vs PCA su asse k comune.
 
-    Sinistra: SVD — Accuracy vs k  (asse secondario: % dati memorizzati)
-    Destra:   PCA — Accuracy vs n  (asse secondario: feature usate su 65.536)
+    Un singolo pannello con due curve sovrapposte:
+      - Arancione: SVD (k valori singolari) vs k
+      - Verde:     PCA (k coordinate)       vs k
+      - Rosso tratteggiato: baseline Raw Pixels
+
+    L'asse x è lo stesso per entrambe → confronto mele con mele.
     """
-    from .config import TARGET_SIZE
-
     clf_label = _classifier_label(classifier)
     suffix = f"_{classifier}" if classifier != 'knn' else ""
 
-    h, w = TARGET_SIZE
-    n_pixels = h * w
-
     # ── Estrai baseline ──
-    raw_key = [k for k in results if k.startswith("Raw Pixels")]
+    raw_key = next((k for k in results if k == "Raw Pixels"), None)
     if not raw_key:
         return
-    raw_key = raw_key[0]
     raw_acc, raw_std = results[raw_key]["accuracy"]
 
-    # ── SVD ──
+    import re as _re
+
+    # ── SVD feature points ──
     svd_points = []
-    for name, metrics in results.items():
+    for name, met in results.items():
         if name.startswith("SVD k="):
-            k = int(name.split("k=")[1].split(" ")[0])
-            pct = k * (h + w + 1) / n_pixels * 100
-            svd_points.append((k, pct, metrics["accuracy"][0],
-                               metrics["accuracy"][1]))
+            m = _re.search(r'k=(\d+)', name)
+            if m:
+                k = int(m.group(1))
+                svd_points.append((k, met["accuracy"][0], met["accuracy"][1]))
     svd_points.sort()
 
-    # ── PCA ──
+    # ── PCA points ──
     pca_points = []
-    for name, metrics in results.items():
-        if name.startswith("PCA ("):
-            n = int(name.split("(")[1].split(" ")[0])
-            pca_points.append((n, metrics["accuracy"][0],
-                               metrics["accuracy"][1]))
+    for name, met in results.items():
+        if name.startswith("PCA k="):
+            m = _re.search(r'k=(\d+)', name)
+            if m:
+                k = int(m.group(1))
+                pca_points.append((k, met["accuracy"][0], met["accuracy"][1]))
     pca_points.sort()
 
     if not svd_points and not pca_points:
         return
 
-    # ── Figure ──
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6.5))
+    fig, ax = plt.subplots(figsize=(12, 7))
 
-    # ===========  SVD  ===========
-    # Baseline band
-    ax1.axhspan(raw_acc - raw_std, raw_acc + raw_std,
-                color='#e74c3c', alpha=0.07)
-    ax1.axhline(raw_acc, color='#e74c3c', ls='--', alpha=0.6, lw=1.5,
-                label=f'Baseline: Raw Pixels ({raw_acc*100:.1f}%)')
+    # Baseline
+    ax.axhspan(raw_acc - raw_std, raw_acc + raw_std,
+               color='#e74c3c', alpha=0.08)
+    ax.axhline(raw_acc, color='#e74c3c', ls='--', alpha=0.7, lw=2,
+               label=f'Baseline: Raw Pixels ({raw_acc*100:.1f}%)')
+
+    color_svd = '#e67e22'
+    color_pca = '#27ae60'
 
     # Curva SVD
-    ks = [p[0] for p in svd_points]
-    accs = [p[2] for p in svd_points]
-    stds = [p[3] for p in svd_points]
-
-    ax1.errorbar(ks, accs, yerr=stds, fmt='o-', color='#e67e22',
-                 markersize=11, mec='white', mew=2,
-                 capsize=4, elinewidth=1.5, lw=2.5,
-                 label='SVD troncata', zorder=5)
-
-    # Valori semplici sopra ogni punto
-    for k, pct, acc, std in svd_points:
-        ax1.text(k, acc + std + 0.006, f'{acc*100:.1f}%',
-                 ha='center', va='bottom', fontsize=9.5,
-                 fontweight='bold', color='#e67e22')
-
-    # Asse X secondario: % dati memorizzati
-    ax1_top = ax1.twiny()
-    ax1_top.set_xlim(ax1.get_xlim())
-    ax1_top.set_xticks(ks)
-    ax1_top.set_xticklabels([f'{p[1]:.0f}%' for p in svd_points],
-                            fontsize=9, color='#888888')
-    ax1_top.set_xlabel('Dati memorizzati (%)', fontsize=10, color='#888888')
-
-    ax1.set_xlabel('Rango SVD (k)', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
-    ax1.set_title(f'SVD: Compressione Immagine ({clf_label})',
-                  fontsize=14, fontweight='bold')
-    ax1.legend(fontsize=9, loc='lower right')
-    ax1.grid(True, alpha=0.25)
-    ax1.set_ylim(max(0.65, raw_acc - 0.06), min(1.0, raw_acc + 0.06))
-    if ks:
-        ax1.set_xlim(min(ks) - 3, max(ks) + 5)
-
-    # Take-away SVD
-    if classifier == 'knn':
-        svd_text = 'Comprimere al 4% dei dati\nnon degrada la classificazione'
-    else:
-        svd_text = 'Comprimere al 7.8% (k=10)\npreserva o migliora l\'accuratezza'
-        
-    ax1.text(0.03, 0.97,
-             svd_text,
-             transform=ax1.transAxes, fontsize=9.5, va='top',
-             fontstyle='italic',
-             bbox=dict(boxstyle='round,pad=0.4', fc='#fff8e7',
-                       ec='#e67e22', alpha=0.95))
-
-    # ===========  PCA  ===========
-    # Baseline band
-    ax2.axhspan(raw_acc - raw_std, raw_acc + raw_std,
-                color='#e74c3c', alpha=0.07)
-    ax2.axhline(raw_acc, color='#e74c3c', ls='--', alpha=0.6, lw=1.5,
-                label=f'Baseline: Raw Pixels ({raw_acc*100:.1f}%)')
+    if svd_points:
+        ks  = [p[0] for p in svd_points]
+        acc = [p[1] for p in svd_points]
+        std = [p[2] for p in svd_points]
+        ax.errorbar(ks, acc, yerr=std, fmt='o-', color=color_svd,
+                    markersize=12, mec='white', mew=2,
+                    capsize=4, elinewidth=1.5, lw=2.5,
+                    label='SVD — σᵢuᵢ|σᵢvᵢ → PCA(k) → k feat', zorder=5)
+        for k, a, s in svd_points:
+            ax.text(k, a + s + 0.007,
+                    f'{a*100:.1f}%\n({2*256*k:,}→{k})',
+                    ha='center', va='bottom', fontsize=8.5,
+                    fontweight='bold', color=color_svd)
 
     # Curva PCA
-    ns = [p[0] for p in pca_points]
-    accs = [p[1] for p in pca_points]
-    stds = [p[2] for p in pca_points]
+    if pca_points:
+        ks  = [p[0] for p in pca_points]
+        acc = [p[1] for p in pca_points]
+        std = [p[2] for p in pca_points]
+        ax.errorbar(ks, acc, yerr=std, fmt='D-', color=color_pca,
+                    markersize=12, mec='white', mew=2,
+                    capsize=4, elinewidth=1.5, lw=2.5,
+                    label='PCA — pixel → PCA(k) → k feat', zorder=5)
+        for k, a, s in pca_points:
+            ax.text(k, a - s - 0.018,
+                    f'{a*100:.1f}%\n(65536→{k})',
+                    ha='center', va='top', fontsize=8.5,
+                    fontweight='bold', color=color_pca)
 
-    ax2.errorbar(ns, accs, yerr=stds, fmt='D-', color='#27ae60',
-                 markersize=11, mec='white', mew=2,
-                 capsize=4, elinewidth=1.5, lw=2.5,
-                 label='PCA riduzione', zorder=5)
+    # Annotazione take-away
+    ax.text(0.03, 0.05,
+            'Entrambi arrivano al classificatore con k feature finali.\n'
+            'SVD: spazio intermedio 2·256·k  |  PCA: spazio intermedio 65.536',
+            transform=ax.transAxes, fontsize=9.5, va='bottom',
+            fontstyle='italic',
+            bbox=dict(boxstyle='round,pad=0.4', fc='#f8f8f8',
+                      ec='#888888', alpha=0.9))
 
-    # Valori semplici sopra ogni punto
-    for n, acc, std in pca_points:
-        ax2.text(n, acc + std + 0.006, f'{acc*100:.1f}%',
-                 ha='center', va='bottom', fontsize=9.5,
-                 fontweight='bold', color='#27ae60')
+    all_k = sorted(set([p[0] for p in svd_points] + [p[0] for p in pca_points]))
+    ax.set_xticks(all_k)
+    ax.set_xlabel('Numero di feature k', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Accuracy (5-Fold CV)', fontsize=13, fontweight='bold')
+    ax.set_title(f'SVD Spaziale vs PCA — {clf_label}\n'
+                 f'Entrambi con k feature finali (spazi intermedi diversi)',
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11, loc='lower right')
+    ax.grid(True, alpha=0.3)
 
-    # Asse X secondario: feature su 65.536
-    ax2_top = ax2.twiny()
-    ax2_top.set_xlim(ax2.get_xlim())
-    ax2_top.set_xticks(ns)
-    ax2_top.set_xticklabels([f'{n/n_pixels*100:.2f}%' for n in ns],
-                            fontsize=9, color='#888888')
-    ax2_top.set_xlabel('Feature usate (% su 65.536)', fontsize=10,
-                       color='#888888')
+    all_accs = ([p[1] for p in svd_points] + [p[1] for p in pca_points]
+                + [raw_acc])
+    all_stds = ([p[2] for p in svd_points] + [p[2] for p in pca_points]
+                + [raw_std])
+    y_min = min(a - s for a, s in zip(all_accs, all_stds)) - 0.04
+    y_max = max(a + s for a, s in zip(all_accs, all_stds)) + 0.04
+    ax.set_ylim(max(0.50, y_min), min(1.0, y_max))
+    if all_k:
+        ax.set_xlim(min(all_k) - 3, max(all_k) + 5)
 
-    ax2.set_xlabel('Componenti PCA (n)', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
-    ax2.set_title(f'PCA: Riduzione Dimensionale ({clf_label})',
-                  fontsize=14, fontweight='bold')
-    ax2.legend(fontsize=9, loc='lower right')
-    ax2.grid(True, alpha=0.25)
-    ax2.set_ylim(max(0.65, raw_acc - 0.06), min(1.0, raw_acc + 0.06))
-    if ns:
-        ax2.set_xlim(min(ns) - 8, max(ns) + 15)
-
-    # Take-away PCA
-    if classifier == 'knn':
-        pca_text = '25 feature su 65.536 (0.04%)\nclassificano meglio dei pixel grezzi'
-    else:
-        pca_text = 'La Logistic Regression sale con n\nraggiungendo la baseline a 150 comp.'
-        
-    ax2.text(0.03, 0.97,
-             pca_text,
-             transform=ax2.transAxes, fontsize=9.5, va='top',
-             fontstyle='italic',
-             bbox=dict(boxstyle='round,pad=0.4', fc='#effbf3',
-                       ec='#27ae60', alpha=0.95))
-
-    fig.suptitle(f'Trade-off: Compressione / Riduzione vs Capacità Diagnostica'
-                 f' ({clf_label})',
-                 fontsize=15, fontweight='bold', y=1.01)
     plt.tight_layout()
     if save:
         plt.savefig(os.path.join(OUTPUT_DIR,
-                    f'fase6_hero_tradeoff{suffix}.png'),
+                    f'fase5_hero_tradeoff{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -629,18 +635,19 @@ def plot_knn_vs_lr(
     n = len(common_scenarios)
 
     # Abbreviazioni per leggibilità sull'asse X
+    import re as _re
     short_names = []
     for s in common_scenarios:
         if s.startswith("Raw"):
-            short_names.append("Raw")
-        elif s.startswith("PCA"):
-            n_comp = s.split("(")[1].split(" ")[0]
-            short_names.append(f"PCA-{n_comp}")
-        elif s.startswith("SVD"):
-            k_val = s.split("k=")[1].split(" ")[0]
-            short_names.append(f"SVD-{k_val}")
+            short_names.append("Raw Pixels")
+        elif s.startswith("PCA k="):
+            m = _re.search(r'k=(\d+)', s)
+            short_names.append(f"PCA k={m.group(1)}" if m else s[:14])
+        elif s.startswith("SVD k="):
+            m = _re.search(r'k=(\d+)', s)
+            short_names.append(f"SVD k={m.group(1)}" if m else s[:14])
         else:
-            short_names.append(s[:12])
+            short_names.append(s[:14])
 
     fig, axes = plt.subplots(2, 2, figsize=(18, 12))
     axes = axes.ravel()
@@ -697,6 +704,6 @@ def plot_knn_vs_lr(
                  fontsize=15, fontweight='bold')
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase6_knn_vs_lr.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_knn_vs_lr.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()

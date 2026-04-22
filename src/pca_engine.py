@@ -89,25 +89,72 @@ def plot_pca_scatter(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_eigenfaces(pca_model: PCA, n_show: int = 10, save: bool = True) -> None:
-    """Visualizza le prime n componenti principali come immagini (Eigen X-Rays)."""
-    rows = (n_show + 4) // 5
-    fig, axes = plt.subplots(rows, 5, figsize=(18, 3.5 * rows))
+    """
+    Visualizza le prime n componenti principali come immagini (Eigen X-Rays).
+
+    Miglioramenti rispetto alla versione precedente:
+    - La prima cella mostra la mean face (pca_model.mean_) come riferimento
+    - Scala simmetrica comune vmin/vmax tra tutte le componenti, per rendere
+      i colori comparabili in magnitudine
+    - Colorbar condivisa che indica l'unità di misura dei coefficienti
+    """
+    # ── 1. Mean face (immagine di riferimento) ─────────────────────────────────
+    mean_face = pca_model.mean_.reshape(TARGET_SIZE)
+
+    # ── 2. Calcola vmin/vmax simmetrico comune su TUTTE le n_show componenti ──
+    #    Usa il 99° percentile per escludere outlier estremi
+    all_vals = np.concatenate([pca_model.components_[i] for i in range(n_show)])
+    vmax = np.percentile(np.abs(all_vals), 99)
+    vmin = -vmax   # simmetria attorno allo zero
+
+    # ── 3. Layout: 1 colonna per la mean face + n_show eigenfaces ─────────────
+    n_total = n_show + 1               # +1 per la mean face
+    n_cols  = 5
+    n_rows  = (n_total + n_cols - 1) // n_cols   # ceil division
+
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(18, 3.8 * n_rows),
+                             gridspec_kw={'hspace': 0.45, 'wspace': 0.05})
     axes = axes.ravel()
 
+    # ── 4. Mean face nella prima cella (colormap grigia, valori [0,1]) ─────────
+    im_mean = axes[0].imshow(mean_face, cmap='gray', vmin=0, vmax=1)
+    axes[0].set_title('Mean face\n(riferimento)', fontweight='bold', fontsize=10)
+    axes[0].axis('off')
+    # colorbar dedicata per la mean face
+    cbar_mean = fig.colorbar(im_mean, ax=axes[0], fraction=0.046, pad=0.04)
+    cbar_mean.set_label('Intensità norm.', fontsize=7)
+    cbar_mean.ax.tick_params(labelsize=6)
+
+    # ── 5. Eigenfaces con scala comune ────────────────────────────────────────
+    im_ref = None   # salviamo uno per la colorbar condivisa
     for i in range(n_show):
         eigenface = pca_model.components_[i].reshape(TARGET_SIZE)
-        axes[i].imshow(eigenface, cmap='RdBu_r')
-        axes[i].set_title(f'PC {i+1}\n({pca_model.explained_variance_ratio_[i]:.1%})',
-                          fontweight='bold')
-        axes[i].axis('off')
+        ax = axes[i + 1]
+        im = ax.imshow(eigenface, cmap='RdBu_r', vmin=vmin, vmax=vmax)
+        ax.set_title(f'PC {i+1}  ({pca_model.explained_variance_ratio_[i]:.1%})',
+                     fontweight='bold', fontsize=10)
+        ax.axis('off')
+        if i == 0:
+            im_ref = im   # riferimento per la colorbar condivisa
 
-    # nascondi assi vuoti
-    for j in range(n_show, len(axes)):
+    # ── 6. Nascondi celle vuote ────────────────────────────────────────────────
+    for j in range(n_total, len(axes)):
         axes[j].axis('off')
 
-    plt.suptitle('Le prime 10 Componenti Principali ("Eigen-Xrays")',
-                 fontsize=16, fontweight='bold', y=1.02)
-    plt.tight_layout()
+    # ── 7. Colorbar condivisa per tutte le eigenfaces ─────────────────────────
+    #    Agganciata all'area delle eigenfaces (tutte le celle tranne la prima)
+    eigenface_axes = axes[1:n_show + 1]
+    cbar = fig.colorbar(im_ref, ax=eigenface_axes.tolist(),
+                        fraction=0.015, pad=0.02, shrink=0.85)
+    cbar.set_label('Coefficiente componente principale\n(rosso = +, blu = −)',
+                   fontsize=9)
+    cbar.ax.tick_params(labelsize=8)
+
+    plt.suptitle('Le prime 10 Componenti Principali ("Eigen-Xrays")\n'
+                 'Scala cromatica comune — colori comparabili tra componenti',
+                 fontsize=14, fontweight='bold', y=1.01)
+
     if save:
         plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_eigenfaces.png'),
                     dpi=150, bbox_inches='tight')

@@ -7,7 +7,6 @@ Contiene tutti i percorsi, le costanti e i parametri condivisi tra i moduli.
 import os
 import warnings
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 # ─── Soppressione warning ─────────────────────────────────────────────────────
 # Filtro ristretto: manteniamo visibili ConvergenceWarning e altri warning critici.
@@ -52,16 +51,24 @@ LR_MAX_ITER = 2000                      # iterazioni massime per Logistic Regres
 LR_C = 1.0                             # regolarizzazione inversa (1/λ)
 CV_N_FOLDS = 5                          # fold per cross-validation stratificata
 RANDOM_STATE = 42                       # seed per riproducibilità
-SVD_K_VALUES = [10, 50]                  # ridotto per leggibilità grafici (10 per compressione estrema, 50 per alta qualità)
-PCA_COMPONENTS_LIST = [25, 150]          # ridotto per leggibilità (25 per picco KNN, 150 per picco LR)
+
+# Fase 6 — confronto SVD compressione rank-k vs PCA riduzione dimensionale
+# SVD: il classificatore riceve 65.536 pixel ricostruiti da A_k = U_k @ diag(S_k) @ Vk.T
+#      Domanda: "La compressione rank-k e' diagnosticamente lossless?"
+# PCA: il classificatore riceve k coordinate principali (Pipeline: Scaler -> PCA(k) -> clf)
+#      Domanda: "Bastano k componenti per classificare?"
+SVD_K_FEATURES = [10, 25, 50]           # k per ricostruzione SVD rank-k (feat_dim = 256*256)
+PCA_COMPONENTS_LIST = [10, 25, 50]      # k componenti PCA (feat_dim = k)
+
+SVD_K_VALUES = [10, 50]                 # k per visualizzazione ricostruzione (Fase 4)
 
 # ─── Colori per le classi ─────────────────────────────────────────────────────
 CLASS_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12']
 
 # ─── Stile grafici ────────────────────────────────────────────────────────────
 def setup_plot_style():
-    """Configura lo stile globale dei grafici matplotlib/seaborn."""
-    sns.set_theme(style="whitegrid")
+    """Configura lo stile globale dei grafici matplotlib."""
+    plt.style.use('seaborn-v0_8-whitegrid')
     plt.rcParams.update({
         'figure.figsize': (12, 6),
         'font.size': 12,

@@ -47,7 +47,7 @@ def plot_svd_reconstruction(
     save: bool = True
 ) -> None:
     """
-    Fase 4 — Griglia di ricostruzioni SVD a diversi valori di k con metriche.
+    Fase 3.2 — Griglia di ricostruzioni SVD a diversi valori di k con metriche.
     """
     if k_values is None:
         k_values = K_VALUES_DEMO
@@ -79,11 +79,11 @@ def plot_svd_reconstruction(
                                 fontweight='bold')
         axes[idx + 1].axis('off')
 
-    plt.suptitle(f'Fase 4 — Ricostruzione SVD a diversi livelli di compressione '
+    plt.suptitle(f'Fase 3.2 — Ricostruzione SVD a diversi livelli di compressione '
                  f'(Classe: {class_name})', fontsize=16, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase4_ricostruzione_svd.png'),
+        plt.savefig(os.path.join(OUTPUT_DIR, 'fase3.2_ricostruzione_svd.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
