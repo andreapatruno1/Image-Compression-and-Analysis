@@ -25,14 +25,31 @@ def _image_files(folder: str) -> list[str]:
     return sorted(f for f in os.listdir(folder) if f.lower().endswith(exts))
 
 
-def count_images() -> dict:
+def count_images(classes: Optional[list] = None,
+                 dataset_dir: Optional[str] = None,
+                 split: Optional[str] = None) -> dict:
     """
     Conta le immagini per classe nel dataset.
+
+    Parameters
+    ----------
+    classes : list, optional
+        Lista delle classi. Se None, usa CLASSES da config.
+    dataset_dir : str, optional
+        Directory del dataset. Se None, usa DATASET_DIR da config.
+    split : str, optional
+        Sottodirectory dello split. Se None, usa SPLIT da config.
     """
+    if classes is None:
+        classes = CLASSES
+    if dataset_dir is None:
+        dataset_dir = DATASET_DIR
+    if split is None:
+        split = SPLIT
+
     counts = {}
-    for cls in CLASSES:
-        # Usiamo SPLIT (che è "") invece di "train" fisso
-        folder = os.path.join(DATASET_DIR, SPLIT, cls)
+    for cls in classes:
+        folder = os.path.join(dataset_dir, split, cls)
 
         # Aggiungiamo un controllo per evitare errori se la cartella non esiste
         if os.path.exists(folder):
@@ -55,7 +72,9 @@ def print_image_counts(counts: dict) -> None:
             print(f"  {cls:30s}: {n:4d} immagini")
 
 
-def load_sample_images(split: str = SPLIT) -> dict[str, np.ndarray]:
+def load_sample_images(split: str = SPLIT,
+                       classes: Optional[list] = None,
+                       dataset_dir: Optional[str] = None) -> dict[str, np.ndarray]:
     """
     Carica la prima immagine grezza (uint8) per ciascuna classe valida,
     escludendo le radiografie laterali e le immagini corrotte dal padding.
@@ -64,9 +83,14 @@ def load_sample_images(split: str = SPLIT) -> dict[str, np.ndarray]:
     -------
     dict : {classe: np.ndarray}  -- immagini originali non ridimensionate
     """
+    if classes is None:
+        classes = CLASSES
+    if dataset_dir is None:
+        dataset_dir = DATASET_DIR
+
     samples = {}
     for cls in CLASSES:
-        folder = os.path.join(DATASET_DIR, split, cls)
+        folder = os.path.join(dataset_dir, split, cls)
         files = _image_files(folder)
         for f in files:
             with Image.open(os.path.join(folder, f)) as _img:
@@ -341,7 +365,9 @@ def load_dataset(
     max_per_class: int = MAX_PER_CLASS,
     target_size: tuple = TARGET_SIZE,
     apply_tilt_correction: bool = CORRECT_TILT,
-    max_tilt: float = MAX_TILT_ANGLE
+    max_tilt: float = MAX_TILT_ANGLE,
+    classes: Optional[list] = None,
+    dataset_dir: Optional[str] = None
 ) -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray]:
     """
     Carica e pre-elabora un batch di immagini da ciascuna classe.
@@ -354,12 +380,17 @@ def load_dataset(
     all_images      : np.ndarray di shape (N_totale, H, W)
     labels          : np.ndarray di stringhe con la classe di ogni immagine
     """
+    if classes is None:
+        classes = CLASSES
+    if dataset_dir is None:
+        dataset_dir = DATASET_DIR
+
     images_by_class = {}
     all_images = []
     labels = []
 
     for cls in CLASSES:
-        folder = os.path.join(DATASET_DIR, split, cls)
+        folder = os.path.join(dataset_dir, split, cls)
         files = _image_files(folder)
         class_imgs = []
         skipped_tilt = 0
@@ -419,7 +450,9 @@ def load_dataset(
 
 def load_raw_samples(
     split: str = SPLIT,
-    n_samples: int = 3
+    n_samples: int = 3,
+    classes: Optional[list] = None,
+    dataset_dir: Optional[str] = None
 ) -> dict[str, list[tuple[np.ndarray, str]]]:
     """
     Carica immagini RAW (solo resize, SENZA correzione tilt) per il confronto
@@ -429,9 +462,14 @@ def load_raw_samples(
     -------
     dict : {classe: [(img_raw_resized, filename), ...]}
     """
+    if classes is None:
+        classes = CLASSES
+    if dataset_dir is None:
+        dataset_dir = DATASET_DIR
+
     raw_by_class = {}
     for cls in CLASSES:
-        folder = os.path.join(DATASET_DIR, split, cls)
+        folder = os.path.join(dataset_dir, split, cls)
         files = _image_files(folder)
         samples = []
         for f in files:

@@ -6,6 +6,7 @@ e per il confronto tra classi diagnostiche.
 """
 
 import os
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -14,13 +15,24 @@ from .svd_engine import apply_svd, reconstruct_svd, compression_ratio, mse, psnr
 from .data_loader import detect_tilt_angle, correct_tilt, is_lateral_xray
 
 
-def plot_exploration(sample_images: dict[str, np.ndarray], save: bool = True) -> None:
+def plot_exploration(sample_images: dict[str, np.ndarray], save: bool = True,
+                     classes: Optional[list] = None,
+                     output_dir: Optional[str] = None) -> None:
     """
     Fase 1 — Mostra un campione per ciascuna classe con il relativo istogramma dei pixel.
     """
-    fig, axes = plt.subplots(2, 4, figsize=(18, 8))
+    if classes is None:
+        classes = CLASSES
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
 
-    for i, cls in enumerate(CLASSES):
+    n = len(classes)
+    fig, axes = plt.subplots(2, n, figsize=(4.5 * n, 8))
+    # Se c'è una sola classe, axes è 1D — normalizziamo a 2D
+    if n == 1:
+        axes = axes.reshape(2, 1)
+
+    for i, cls in enumerate(classes):
         axes[0, i].imshow(sample_images[cls], cmap='gray')
         axes[0, i].set_title(cls, fontweight='bold')
         axes[0, i].axis('off')
@@ -35,7 +47,7 @@ def plot_exploration(sample_images: dict[str, np.ndarray], save: bool = True) ->
                  fontsize=16, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase1_esplorazione.png'),
+        plt.savefig(os.path.join(output_dir, 'fase1_esplorazione.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -44,13 +56,16 @@ def plot_svd_reconstruction(
     image: np.ndarray,
     class_name: str = "Normal",
     k_values: list[int] = None,
-    save: bool = True
+    save: bool = True,
+    output_dir: Optional[str] = None
 ) -> None:
     """
     Fase 3.2 — Griglia di ricostruzioni SVD a diversi valori di k con metriche.
     """
     if k_values is None:
         k_values = K_VALUES_DEMO
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
 
     U, S, Vt = apply_svd(image)
     m, n = image.shape
@@ -83,7 +98,7 @@ def plot_svd_reconstruction(
                  f'(Classe: {class_name})', fontsize=16, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase3.2_ricostruzione_svd.png'),
+        plt.savefig(os.path.join(output_dir, 'fase3.2_ricostruzione_svd.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -91,17 +106,28 @@ def plot_svd_reconstruction(
 def plot_class_comparison(
     images_by_class: dict[str, np.ndarray],
     k_values: list[int] = None,
-    save: bool = True
+    save: bool = True,
+    classes: Optional[list] = None,
+    output_dir: Optional[str] = None
 ) -> None:
     """
-    Fase 4 — Confronto della ricostruzione SVD tra le 4 classi diagnostiche.
+    Fase 4 — Confronto della ricostruzione SVD tra le classi.
     """
     if k_values is None:
         k_values = K_VALUES_COMPARE
+    if classes is None:
+        classes = CLASSES
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
 
-    fig, axes = plt.subplots(4, len(k_values) + 1, figsize=(22, 18))
+    n_cls = len(classes)
+    fig, axes = plt.subplots(n_cls, len(k_values) + 1,
+                             figsize=(22, 4.5 * n_cls))
+    # Se c'è una sola classe, normalizziamo ad array 2D
+    if n_cls == 1:
+        axes = axes.reshape(1, -1)
 
-    for row, cls in enumerate(CLASSES):
+    for row, cls in enumerate(classes):
         img = images_by_class[cls][0]
         U, S, Vt = apply_svd(img)
 
@@ -123,29 +149,39 @@ def plot_class_comparison(
             axes[row, col + 1].set_title(f'k={k} | PSNR={p:.1f}', fontweight='bold')
             axes[row, col + 1].axis('off')
 
-    plt.suptitle('Confronto SVD tra le 4 classi diagnostiche',
+    plt.suptitle(f'Confronto SVD tra le {n_cls} classi',
                  fontsize=16, fontweight='bold', y=1.01)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase4_confronto_classi.png'),
+        plt.savefig(os.path.join(output_dir, 'fase4_confronto_classi.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
 
 def plot_tilt_correction(
     raw_samples: dict[str, list[tuple[np.ndarray, str]]],
-    save: bool = True
+    save: bool = True,
+    classes: Optional[list] = None,
+    output_dir: Optional[str] = None
 ) -> None:
     """
     Mostra il prima/dopo della correzione dell'inclinazione.
     Riceve immagini RAW (senza correzione tilt applicata) per mostrare il
     vero confronto.
     """
-    n_samples = max(len(v) for v in raw_samples.values())
-    fig, axes = plt.subplots(len(CLASSES), n_samples * 2,
-                             figsize=(4 * n_samples * 2, 4 * len(CLASSES)))
+    if classes is None:
+        classes = CLASSES
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
 
-    for row, cls in enumerate(CLASSES):
+    n_samples = max(len(v) for v in raw_samples.values())
+    fig, axes = plt.subplots(len(classes), n_samples * 2,
+                             figsize=(4 * n_samples * 2, 4 * len(classes)))
+    # Normalizza axes in 2D se c'è una sola classe
+    if len(classes) == 1:
+        axes = axes.reshape(1, -1)
+
+    for row, cls in enumerate(classes):
         samples = raw_samples[cls]
         for col in range(min(n_samples, len(samples))):
             raw_img, fname = samples[col]
@@ -173,6 +209,6 @@ def plot_tilt_correction(
                  fontsize=16, fontweight='bold', y=1.01)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase2_correzione_tilt.png'),
+        plt.savefig(os.path.join(output_dir, 'fase2_correzione_tilt.png'),
                     dpi=150, bbox_inches='tight')
     plt.close()

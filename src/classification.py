@@ -289,9 +289,23 @@ def plot_confusion_matrix(
     scenarios: dict[str, tuple[np.ndarray, Pipeline]],
     labels: np.ndarray,
     classifier: str = 'knn',
-    save: bool = True
+    save: bool = True,
+    classes: Optional[list] = None,
+    short_labels: Optional[list] = None,
+    output_dir: Optional[str] = None
 ) -> None:
     """Confusion matrix per ogni scenario."""
+    if classes is None:
+        classes = CLASSES
+    if short_labels is None:
+        # Fallback retrocompatibile con il dataset medico originale
+        if list(classes) == list(CLASSES):
+            short_labels = ["COVID", "Normal", "Pneum.", "TB"]
+        else:
+            short_labels = list(classes)
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+
     clf_label = _classifier_label(classifier)
     suffix = f"_{classifier}" if classifier != 'knn' else ""
 
@@ -302,18 +316,17 @@ def plot_confusion_matrix(
 
     cv = StratifiedKFold(n_splits=CV_N_FOLDS, shuffle=True,
                          random_state=RANDOM_STATE)
-    short_labels = ["COVID", "Normal", "Pneum.", "TB"]
 
     for idx, (sc_name, (X, pipe)) in enumerate(scenarios.items()):
         y_pred = cross_val_predict(pipe, X, labels, cv=cv)
-        cm = confusion_matrix(labels, y_pred, labels=CLASSES)
+        cm = confusion_matrix(labels, y_pred, labels=classes)
 
         im = axes[idx].imshow(cm, interpolation='nearest', cmap='Blues')
         axes[idx].set_title(sc_name, fontweight='bold', fontsize=10)
         axes[idx].set_xlabel('Predetto')
         axes[idx].set_ylabel('Reale')
-        axes[idx].set_xticks(range(len(CLASSES)))
-        axes[idx].set_yticks(range(len(CLASSES)))
+        axes[idx].set_xticks(range(len(classes)))
+        axes[idx].set_yticks(range(len(classes)))
         axes[idx].set_xticklabels(short_labels, fontsize=8)
         axes[idx].set_yticklabels(short_labels, fontsize=8)
 
@@ -330,7 +343,7 @@ def plot_confusion_matrix(
                  fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, f'fase5_confusion_matrices{suffix}.png'),
+        plt.savefig(os.path.join(output_dir, f'fase5_confusion_matrices{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -343,10 +356,31 @@ def plot_roc_curves(
     scenarios: dict[str, tuple[np.ndarray, Pipeline]],
     labels: np.ndarray,
     classifier: str = 'knn',
-    save: bool = True
+    save: bool = True,
+    classes: Optional[list] = None,
+    class_colors: Optional[list] = None,
+    short_labels: Optional[list] = None,
+    output_dir: Optional[str] = None
 ) -> None:
-    """Curve ROC One-vs-Rest per ogni scenario."""
+    """Curve ROC One-vs-Rest per ogni scenario.
+
+    Supporta sia problemi multiclasse che binari. Nel caso binario,
+    LabelBinarizer restituisce shape (N, 1): la funzione espande a (N, 2)
+    per mantenere coerente il ciclo sulle classi.
+    """
     from sklearn.base import clone
+
+    if classes is None:
+        classes = CLASSES
+    if class_colors is None:
+        class_colors = CLASS_COLORS
+    if short_labels is None:
+        if list(classes) == list(CLASSES):
+            short_labels = ["COVID", "Normal", "Pneum.", "TB"]
+        else:
+            short_labels = list(classes)
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
 
     clf_label = _classifier_label(classifier)
     suffix = f"_{classifier}" if classifier != 'knn' else ""
@@ -360,7 +394,12 @@ def plot_roc_curves(
                          random_state=RANDOM_STATE)
     lb = LabelBinarizer()
     y_bin = lb.fit_transform(labels)
-    short_labels = ["COVID", "Normal", "Pneum.", "TB"]
+
+    # --- Caso binario: LabelBinarizer produce (N,1), espandi a (N,2) ---
+    is_binary = y_bin.ndim == 2 and y_bin.shape[1] == 1
+    if is_binary:
+        y_bin = np.hstack([1 - y_bin, y_bin])
+        # lb.classes_ è già l'elenco delle 2 classi originali ([neg, pos])
 
     for idx, (sc_name, (X, pipe)) in enumerate(scenarios.items()):
         y_prob = np.zeros_like(y_bin, dtype=np.float64)
@@ -387,7 +426,7 @@ def plot_roc_curves(
             fpr, tpr, _ = roc_curve(y_bin[:, ci], y_prob[:, ci])
             roc_auc = auc(fpr, tpr)
             macro_auc.append(roc_auc)
-            axes[idx].plot(fpr, tpr, color=CLASS_COLORS[ci], linewidth=2,
+            axes[idx].plot(fpr, tpr, color=class_colors[ci], linewidth=2,
                            label=f'{short_labels[ci]} (AUC={roc_auc:.2f})')
 
         axes[idx].plot([0, 1], [0, 1], 'k--', alpha=0.4, linewidth=1)
@@ -404,7 +443,7 @@ def plot_roc_curves(
                  fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, f'fase5_roc_curves{suffix}.png'),
+        plt.savefig(os.path.join(output_dir, f'fase5_roc_curves{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -416,9 +455,12 @@ def plot_roc_curves(
 def plot_classification_comparison(
     results: dict,
     classifier: str = 'knn',
-    save: bool = True
+    save: bool = True,
+    output_dir: Optional[str] = None
 ) -> None:
     """Grafico a barre raggruppate: confronto metriche tra scenari."""
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
     clf_label = _classifier_label(classifier)
     suffix = f"_{classifier}" if classifier != 'knn' else ""
 
@@ -477,7 +519,7 @@ def plot_classification_comparison(
 
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR,
+        plt.savefig(os.path.join(output_dir,
                     f'fase5_classification_comparison{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
@@ -490,7 +532,8 @@ def plot_classification_comparison(
 def plot_hero_tradeoff(
     results: dict,
     classifier: str = 'knn',
-    save: bool = True
+    save: bool = True,
+    output_dir: Optional[str] = None
 ) -> None:
     """Grafico 'eroe' — confronto simmetrico SVD vs PCA su asse k comune.
 
@@ -501,6 +544,8 @@ def plot_hero_tradeoff(
 
     L'asse x è lo stesso per entrambe → confronto mele con mele.
     """
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
     clf_label = _classifier_label(classifier)
     suffix = f"_{classifier}" if classifier != 'knn' else ""
 
@@ -607,7 +652,7 @@ def plot_hero_tradeoff(
 
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR,
+        plt.savefig(os.path.join(output_dir,
                     f'fase5_hero_tradeoff{suffix}.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
@@ -620,13 +665,16 @@ def plot_hero_tradeoff(
 def plot_knn_vs_lr(
     results_knn: dict,
     results_lr: dict,
-    save: bool = True
+    save: bool = True,
+    output_dir: Optional[str] = None
 ) -> None:
     """Confronto diretto KNN vs Logistic Regression su tutti gli scenari.
 
     Genera un grafico 2×2 (Accuracy, Precision, Recall, F1) con barre
     affiancate KNN/LR per ogni scenario.
     """
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
     metrics = ["accuracy", "precision", "recall", "f1"]
     metric_labels = ["Accuracy", "Precision", "Recall", "F1-Score"]
 
@@ -704,6 +752,6 @@ def plot_knn_vs_lr(
                  fontsize=15, fontweight='bold')
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_knn_vs_lr.png'),
+        plt.savefig(os.path.join(output_dir, 'fase5_knn_vs_lr.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()

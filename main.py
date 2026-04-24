@@ -1,159 +1,103 @@
 """
-main.py — Script principale del progetto.
+main.py — Esegue in sequenza i due notebook del progetto.
 
-Esegue in sequenza tutte le 5 fasi dell'analisi:
-  1. Esplorazione dei dati
-  2. Pre-elaborazione
-  3. SVD (motore matematico)
-  4. Ricostruzione e visualizzazione
-  5. Analisi statistica e PCA
+Ordine di esecuzione:
+  1. medical_image_svd_pca.ipynb       (dataset medico, 4 classi)
+  2. mvtec/mvtec_analysis.ipynb        (dataset MVTec AD Screw, binario)
+
+Ogni notebook viene eseguito in-place: le celle vengono rieseguite e gli
+output (stdout + figure) sovrascritti nel file .ipynb stesso. Le figure
+vengono salvate anche su disco dai rispettivi moduli (output/ per il
+medico, outputs_mvtec/ per MVTec).
 
 Uso:
     python main.py
+
+Requisiti:
+    pip install nbclient nbformat jupyter
 """
-import matplotlib
-matplotlib.use('Agg')
+import sys
+import time
+from pathlib import Path
 
-from src.config import setup_plot_style
-from src.data_loader import (count_images, print_image_counts,
-                             load_sample_images, print_sample_properties,
-                             load_dataset, load_raw_samples)
-from src.svd_engine import apply_svd, print_svd_info
-from src.visualization import (plot_exploration, plot_svd_reconstruction,
-                               plot_class_comparison, plot_tilt_correction)
-from src.analysis import plot_scree, plot_mse_psnr, print_summary_table
-from src.pca_engine import run_pca, plot_pca_scatter, plot_eigenfaces
+import nbformat
+from nbclient import NotebookClient
+from nbclient.exceptions import CellExecutionError
 
 
-def main():
-    # --- Configurazione ---
-    setup_plot_style()
+ROOT = Path(__file__).resolve().parent
 
-    # =================================================================
-    #  FASE 1 -- Esplorazione dei Dati
-    # =================================================================
-    print("\n" + "#" * 60)
-    print("  FASE 1 -- ESPLORAZIONE DEI DATI")
-    print("#" * 60)
+# Notebook da eseguire, in ordine.
+# cwd indica la directory di lavoro con cui il kernel viene avviato:
+#   - il notebook medico si aspetta di partire dalla root (usa "from src.*")
+#   - il notebook MVTec sta in mvtec/ e risale a ../ via sys.path al runtime
+NOTEBOOKS = [
+    {
+        "path": ROOT / "medical_image_svd_pca.ipynb",
+        "cwd":  ROOT,
+        "label": "1. Dataset medico (Chest X-Ray, 4 classi)",
+    },
+    {
+        "path": ROOT / "mvtec" / "mvtec_analysis.ipynb",
+        "cwd":  ROOT / "mvtec",
+        "label": "2. Dataset MVTec AD Screw (good vs defective)",
+    },
+]
 
-    counts = count_images()
-    print_image_counts(counts)
 
-    sample_images = load_sample_images()
-    print_sample_properties(sample_images)
+def run_notebook(nb_path: Path, cwd: Path, timeout_per_cell: int = 900) -> None:
+    """Esegue un notebook in-place, salvando output e figure nel file .ipynb."""
+    if not nb_path.exists():
+        raise FileNotFoundError(f"Notebook non trovato: {nb_path}")
 
-    plot_exploration(sample_images)
+    print(f"  -> caricamento {nb_path.relative_to(ROOT)}")
+    nb = nbformat.read(nb_path, as_version=4)
 
-    # ==================================================================
-    #  FASE 2 -- Pre-elaborazione
-    # ==================================================================
-    print("\n" + "#" * 60)
-    print("  FASE 2 -- PRE-ELABORAZIONE")
-    print("#" * 60)
+    client = NotebookClient(
+        nb,
+        timeout=timeout_per_cell,
+        kernel_name="python3",
+        resources={"metadata": {"path": str(cwd)}},
+    )
 
-    images_by_class, all_images, labels = load_dataset()
+    print(f"  -> esecuzione celle (cwd = {cwd.relative_to(ROOT) or '.'})")
+    t0 = time.time()
+    client.execute()
+    dt = time.time() - t0
 
-    # Carica immagini raw (senza tilt correction) per il confronto vero
-    raw_samples = load_raw_samples()
-    plot_tilt_correction(raw_samples)
+    nbformat.write(nb, nb_path)
+    print(f"  -> completato in {dt:.1f}s, notebook ri-salvato")
 
-    # ==================================================================
-    #  FASE 3 -- SVD
-    # ==================================================================
-    print("\n" + "#" * 60)
-    print("  FASE 3 -- SVD (MOTORE MATEMATICO)")
-    print("#" * 60)
 
-    demo_img = images_by_class["Normal"][0]
-    U, S, Vt = apply_svd(demo_img)
-    print_svd_info(demo_img, U, S, Vt)
+def main() -> int:
+    print("#" * 70)
+    print("  PROGETTO — SVD e PCA per compressione e analisi di immagini")
+    print("  Esecuzione sequenziale dei due notebook")
+    print("#" * 70)
 
-    # ==================================================================
-    #  FASE 4 -- Ricostruzione e Visualizzazione
-    # ==================================================================
-    print("\n" + "#" * 60)
-    print("  FASE 4 -- RICOSTRUZIONE E VISUALIZZAZIONE")
-    print("#" * 60)
+    t_start = time.time()
+    for i, nb in enumerate(NOTEBOOKS, start=1):
+        print(f"\n[{i}/{len(NOTEBOOKS)}] {nb['label']}")
+        print("-" * 70)
+        try:
+            run_notebook(nb["path"], nb["cwd"])
+        except CellExecutionError as e:
+            print(f"\n[FALLITO] Errore in una cella di {nb['path'].name}:")
+            print(str(e)[:1500])
+            print(f"\nNota: l'esecuzione si ferma qui. "
+                  f"I notebook successivi NON verranno eseguiti.")
+            return 1
+        except FileNotFoundError as e:
+            print(f"\n[FALLITO] {e}")
+            return 1
 
-    plot_svd_reconstruction(demo_img, class_name="Normal")
-    plot_class_comparison(images_by_class)
-
-    # ==================================================================
-    #  FASE 5 -- Analisi Statistica e PCA
-    # ==================================================================
-    print("\n" + "#" * 60)
-    print("  FASE 5 -- ANALISI STATISTICA E PCA")
-    print("#" * 60)
-
-    # 5.1 Scree plot
-    plot_scree(images_by_class)
-
-    # 5.2 MSE / PSNR vs k
-    plot_mse_psnr(images_by_class)
-
-    # 5.3 PCA
-    pca_model, X_pca = run_pca(all_images)
-    plot_pca_scatter(pca_model, X_pca, labels)
-    plot_eigenfaces(pca_model)
-
-    # 5.4 Tabella riassuntiva
-    print_summary_table(demo_img, class_name="Normal")
-
-    # ==================================================================
-    #  FASE 6 -- Classificazione e Confronto Feature
-    # ==================================================================
-    print("\n" + "#" * 60)
-    print("  FASE 6 -- CLASSIFICAZIONE E CONFRONTO FEATURE")
-    print("#" * 60)
-
-    from src.classification import (prepare_feature_sets, run_classification,
-                                     plot_confusion_matrix, plot_roc_curves,
-                                     plot_classification_comparison,
-                                     plot_hero_tradeoff, plot_knn_vs_lr)
-
-    # Cache SVD: le ricostruzioni vengono calcolate una sola volta
-    # e riusate per entrambi i classificatori
-    svd_cache = {}
-
-    # 6.1a Preparazione scenari -- KNN
-    print("\n--- Preparazione scenari KNN ---")
-    scenarios_knn = prepare_feature_sets(all_images, labels,
-                                         classifier='knn',
-                                         svd_cache=svd_cache)
-
-    # 6.1b Preparazione scenari -- Logistic Regression (riusa cache SVD)
-    print("\n--- Preparazione scenari Logistic Regression ---")
-    scenarios_lr = prepare_feature_sets(all_images, labels,
-                                        classifier='lr',
-                                        svd_cache=svd_cache)
-
-    # 6.2 Classificazione con cross-validation stratificata
-    results_knn = run_classification(scenarios_knn, labels, classifier='knn')
-    results_lr  = run_classification(scenarios_lr,  labels, classifier='lr')
-
-    # 6.3 Confusion matrices (entrambi i classificatori)
-    plot_confusion_matrix(scenarios_knn, labels, classifier='knn')
-    plot_confusion_matrix(scenarios_lr,  labels, classifier='lr')
-
-    # 6.4 Curve ROC multiclasse (entrambi)
-    plot_roc_curves(scenarios_knn, labels, classifier='knn')
-    plot_roc_curves(scenarios_lr,  labels, classifier='lr')
-
-    # 6.5 Confronto metriche tra scenari (entrambi)
-    plot_classification_comparison(results_knn, classifier='knn')
-    plot_classification_comparison(results_lr,  classifier='lr')
-
-    # 6.6 Hero chart: Accuracy vs Compressione (entrambi)
-    plot_hero_tradeoff(results_knn, classifier='knn')
-    plot_hero_tradeoff(results_lr,  classifier='lr')
-
-    # 6.7 Confronto diretto KNN vs Logistic Regression
-    plot_knn_vs_lr(results_knn, results_lr)
-
-    print("\n" + "=" * 60)
-    print("  [OK] PROGETTO COMPLETATO -- Tutti i grafici salvati in output/")
-    print("=" * 60)
+    dt = time.time() - t_start
+    print("\n" + "#" * 70)
+    print(f"  [OK] Entrambi i notebook eseguiti con successo in {dt:.1f}s")
+    print(f"  Output: output/ (medico), outputs_mvtec/ (MVTec)")
+    print("#" * 70)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

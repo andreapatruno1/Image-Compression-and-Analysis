@@ -5,6 +5,7 @@ Scree plot, curve MSE/PSNR e tabella riassuntiva SVD.
 """
 
 import os
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -18,11 +19,20 @@ from .svd_engine import (apply_svd, reconstruct_svd, compression_ratio,
 #  5.1 — SCREE PLOT E VALORI SINGOLARI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> None:
+def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True,
+               classes=None, class_colors=None, output_dir=None,
+               xlim=None, ylim=None) -> None:
     """Scree plot: varianza cumulativa e decadimento dei valori singolari per classe."""
+    if classes is None:
+        classes = CLASSES
+    if class_colors is None:
+        class_colors = CLASS_COLORS
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-    for i, cls in enumerate(CLASSES):
+    for i, cls in enumerate(classes):
         all_cum_vars = []
         all_S = []
         
@@ -37,11 +47,11 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
         mean_S = np.mean(all_S, axis=0)
 
         x_range = range(len(mean_cum_var))
-        axes[0].plot(x_range, mean_cum_var, label=cls, color=CLASS_COLORS[i], linewidth=2)
+        axes[0].plot(x_range, mean_cum_var, label=cls, color=class_colors[i], linewidth=2)
         axes[0].fill_between(x_range, 
                              mean_cum_var - std_cum_var, 
                              mean_cum_var + std_cum_var, 
-                             alpha=0.2, color=CLASS_COLORS[i])
+                             alpha=0.2, color=class_colors[i])
 
         # Usa la curva media per calcolare k90, k95, k99
         k90 = int(np.argmax(mean_cum_var >= 0.90)) + 1 if np.any(mean_cum_var >= 0.90) else len(mean_cum_var)
@@ -51,7 +61,7 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
         print(f"{cls:30s}:  k(90%)={k90:3d}   k(95%)={k95:3d}   k(99%)={k99:3d}  "
               f"su {len(mean_cum_var)} totali (valori medi)")
 
-        axes[1].plot(mean_S, label=cls, color=CLASS_COLORS[i], linewidth=2,
+        axes[1].plot(mean_S, label=cls, color=class_colors[i], linewidth=2,
                      marker='o', markersize=3)
 
     axes[0].axhline(y=0.90, color='gray', linestyle='--', alpha=0.6, label='90%')
@@ -61,7 +71,9 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
     axes[0].set_ylabel('Varianza cumulativa spiegata')
     axes[0].set_title('Scree Plot — Varianza Cumulativa (Media ± std)', fontweight='bold')
     axes[0].legend(fontsize=10)
-    axes[0].set_xlim(0, 100)
+    axes[0].set_xlim(xlim if xlim is not None else (0, 100))
+    if ylim is not None:
+        axes[0].set_ylim(ylim)
 
     axes[1].set_xlabel('Indice i')
     axes[1].set_ylabel('Valore singolare S(i) medio')
@@ -71,7 +83,7 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
 
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_scree_plot.png'),
+        plt.savefig(os.path.join(output_dir, 'fase5_scree_plot.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -80,12 +92,20 @@ def plot_scree(images_by_class: dict[str, np.ndarray], save: bool = True) -> Non
 #  5.2 — CURVE MSE / PSNR vs k
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def plot_mse_psnr(images_by_class: dict[str, np.ndarray], save: bool = True) -> None:
+def plot_mse_psnr(images_by_class: dict[str, np.ndarray], save: bool = True,
+                  classes=None, class_colors=None, output_dir=None) -> None:
     """Grafici MSE e PSNR medi in funzione del numero di componenti k."""
+    if classes is None:
+        classes = CLASSES
+    if class_colors is None:
+        class_colors = CLASS_COLORS
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+
     k_range = np.array(list(K_RANGE_METRICS))
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-    for i, cls in enumerate(CLASSES):
+    for i, cls in enumerate(classes):
         all_mse = []
         all_psnr = []
         
@@ -112,11 +132,11 @@ def plot_mse_psnr(images_by_class: dict[str, np.ndarray], save: bool = True) -> 
         mean_psnr = np.mean(all_psnr, axis=0)
         std_psnr = np.std(all_psnr, axis=0)
 
-        axes[0].plot(k_range, mean_mse, label=cls, color=CLASS_COLORS[i], linewidth=2)
-        axes[0].fill_between(k_range, mean_mse - std_mse, mean_mse + std_mse, alpha=0.2, color=CLASS_COLORS[i])
+        axes[0].plot(k_range, mean_mse, label=cls, color=class_colors[i], linewidth=2)
+        axes[0].fill_between(k_range, mean_mse - std_mse, mean_mse + std_mse, alpha=0.2, color=class_colors[i])
         
-        axes[1].plot(k_range, mean_psnr, label=cls, color=CLASS_COLORS[i], linewidth=2)
-        axes[1].fill_between(k_range, mean_psnr - std_psnr, mean_psnr + std_psnr, alpha=0.2, color=CLASS_COLORS[i])
+        axes[1].plot(k_range, mean_psnr, label=cls, color=class_colors[i], linewidth=2)
+        axes[1].fill_between(k_range, mean_psnr - std_psnr, mean_psnr + std_psnr, alpha=0.2, color=class_colors[i])
 
     axes[0].set_xlabel('Numero di componenti (k)')
     axes[0].set_ylabel('MSE medio')
@@ -134,7 +154,7 @@ def plot_mse_psnr(images_by_class: dict[str, np.ndarray], save: bool = True) -> 
 
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_mse_psnr.png'),
+        plt.savefig(os.path.join(output_dir, 'fase5_mse_psnr.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 

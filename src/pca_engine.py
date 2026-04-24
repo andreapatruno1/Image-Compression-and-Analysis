@@ -5,6 +5,7 @@ Esegue la PCA sul dataset, scatter plot 2D e visualizzazione delle eigenfaces.
 """
 
 import os
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -49,20 +50,30 @@ def plot_pca_scatter(
     pca_model: PCA,
     X_pca: np.ndarray,
     labels: np.ndarray,
-    save: bool = True
+    save: bool = True,
+    classes=None, class_colors=None, output_dir=None,
+    title: Optional[str] = None,
 ) -> None:
     """Scatter plot PCA 2D + varianza spiegata per componente."""
+    if classes is None:
+        classes = CLASSES
+    if class_colors is None:
+        class_colors = CLASS_COLORS
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+
     fig, axes = plt.subplots(1, 2, figsize=(18, 7))
 
-    for i, cls in enumerate(CLASSES):
+    for i, cls in enumerate(classes):
         mask = labels == cls
         axes[0].scatter(X_pca[mask, 0], X_pca[mask, 1],
-                        alpha=0.6, s=30, label=cls, color=CLASS_COLORS[i],
+                        alpha=0.6, s=30, label=cls, color=class_colors[i],
                         edgecolors='white', linewidth=0.3)
 
     axes[0].set_xlabel(f'PC1 ({pca_model.explained_variance_ratio_[0]:.1%} varianza)')
     axes[0].set_ylabel(f'PC2 ({pca_model.explained_variance_ratio_[1]:.1%} varianza)')
-    axes[0].set_title('PCA — Proiezione 2D delle Radiografie', fontweight='bold')
+    scatter_title = title if title is not None else 'PCA — Proiezione 2D delle Radiografie'
+    axes[0].set_title(scatter_title, fontweight='bold')
     axes[0].legend(fontsize=10)
 
     n_comp = len(pca_model.explained_variance_ratio_)
@@ -79,7 +90,7 @@ def plot_pca_scatter(
 
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_pca_scatter.png'),
+        plt.savefig(os.path.join(output_dir, 'fase5_pca_scatter.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()
 
@@ -88,7 +99,8 @@ def plot_pca_scatter(
 #  EIGENFACES (EIGEN X-RAYS)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def plot_eigenfaces(pca_model: PCA, n_show: int = 10, save: bool = True) -> None:
+def plot_eigenfaces(pca_model: PCA, n_show: int = 10, save: bool = True,
+                    output_dir=None, target_size=None) -> None:
     """
     Visualizza le prime n componenti principali come immagini (Eigen X-Rays).
 
@@ -98,8 +110,13 @@ def plot_eigenfaces(pca_model: PCA, n_show: int = 10, save: bool = True) -> None
       i colori comparabili in magnitudine
     - Colorbar condivisa che indica l'unità di misura dei coefficienti
     """
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+    if target_size is None:
+        target_size = TARGET_SIZE
+
     # ── 1. Mean face (immagine di riferimento) ─────────────────────────────────
-    mean_face = pca_model.mean_.reshape(TARGET_SIZE)
+    mean_face = pca_model.mean_.reshape(target_size)
 
     # ── 2. Calcola vmin/vmax simmetrico comune su TUTTE le n_show componenti ──
     #    Usa il 99° percentile per escludere outlier estremi
@@ -129,7 +146,7 @@ def plot_eigenfaces(pca_model: PCA, n_show: int = 10, save: bool = True) -> None
     # ── 5. Eigenfaces con scala comune ────────────────────────────────────────
     im_ref = None   # salviamo uno per la colorbar condivisa
     for i in range(n_show):
-        eigenface = pca_model.components_[i].reshape(TARGET_SIZE)
+        eigenface = pca_model.components_[i].reshape(target_size)
         ax = axes[i + 1]
         im = ax.imshow(eigenface, cmap='RdBu_r', vmin=vmin, vmax=vmax)
         ax.set_title(f'PC {i+1}  ({pca_model.explained_variance_ratio_[i]:.1%})',
@@ -156,6 +173,6 @@ def plot_eigenfaces(pca_model: PCA, n_show: int = 10, save: bool = True) -> None
                  fontsize=14, fontweight='bold', y=1.01)
 
     if save:
-        plt.savefig(os.path.join(OUTPUT_DIR, 'fase5_eigenfaces.png'),
+        plt.savefig(os.path.join(output_dir, 'fase5_eigenfaces.png'),
                     dpi=150, bbox_inches='tight')
     plt.show()

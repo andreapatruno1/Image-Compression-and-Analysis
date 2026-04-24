@@ -22,6 +22,7 @@
    - 4.5 [Fase 6 — Classificazione: SVD Compressione vs PCA Riduzione Dimensionale](#45-fase-6--classificazione-svd-compressione-vs-pca-riduzione-dimensionale)
 5. [Architettura del Codice](#5-architettura-del-codice)
 6. [Discussione Critica](#6-discussione-critica)
+   - 6.1 [Estensione a MVTec AD 'Screw'](#61-estensione-a-mvtec-ad-screw)
 7. [Conclusioni](#7-conclusioni)
 
 ---
@@ -531,6 +532,51 @@ Medical Image Compression and Analysis/
 
 ## 6. Discussione Critica
 
+### 6.1 Estensione a MVTec AD 'Screw'
+
+Oltre al dataset medico, la stessa pipeline è stata implementata anche su un
+dataset differente: **MVTec AD 'Screw'**, formato da immagini di viti
+industriali normali (`good`) e difettose (`defective`). L'obiettivo di questa
+estensione non era affrontare il problema come benchmark di anomaly detection,
+ma usare un dataset con anomalie per verificare quanto le conclusioni ottenute
+nel caso medico fossero davvero trasferibili in un dominio meno omogeneo.
+
+L'estensione è documentata nel notebook
+`mvtec/mvtec_analysis.ipynb` e riusa la stessa logica del progetto originale:
+
+- SVD per compressione e ricostruzione rank-k della singola immagine
+- PCA come riduzione dimensionale dataset-level
+- classificazione `good vs defective` con la stessa pipeline sperimentale
+
+Il confronto tra i due dataset mostra un risultato netto:
+
+- sul **dataset medico**, SVD e PCA risultano entrambe utili, anche se con ruoli diversi
+- sul **dataset MVTec**, la **SVD** rimane stabile, mentre la **PCA** perde molta più efficacia
+
+In termini quantitativi, sul dataset MVTec con Logistic Regression:
+
+| Scenario | Accuracy |
+|---|---|
+| Raw Pixels | **79.9%** |
+| SVD k=10 | **79.5%** |
+| SVD k=25 | **78.2%** |
+| SVD k=50 | **79.9%** |
+| PCA k=10 | **68.6%** |
+| PCA k=25 | **74.9%** |
+| PCA k=50 | **75.7%** |
+
+Questo confronto va letto così:
+
+- la **SVD** conserva quasi tutta l'informazione utile anche passando a un dataset diverso
+- la **PCA** è molto più dipendente dalla struttura della variabilità del dataset
+- quindi la pipeline non si trasferisce in blocco: alcune conclusioni generalizzano, altre no
+
+Il valore aggiunto dell'estensione è proprio questo: mostrare che il caso
+industriale non replica semplicemente il risultato del notebook medico, ma lo
+raffina. In particolare, conferma la robustezza della SVD e ridimensiona la
+generalità della PCA quando il segnale discriminante è più locale e meno
+allineato con la varianza dominante del dataset.
+
 ### Cosa funziona bene
 
 1. **La SVD è efficace per la compressione.** Il Teorema di Eckart-Young garantisce l'ottimalità teorica; i risultati empirici confermano che $k = 20$ è sufficiente per qualità diagnostica (PSNR > 30 dB) usando solo il 15.7% dei dati.
@@ -579,4 +625,3 @@ Medical Image Compression and Analysis/
 | **PCA riduzione dimensionale efficace da k=25** | 25 componenti (99.96% riduzione) → accuracy **83.4%** con LR; 50 componenti → **83.2%**. Il gap rispetto alla baseline è modesto e giustificato dalla drastica riduzione |
 | **PCA k=10 insufficiente per LR, accettabile per KNN** | LR: 78.8% (−6.3pp dalla baseline); KNN: 83.0% (−0.2pp). 10 componenti non linearizzano le 4 classi, ma preservano le strutture di distanza utili a KNN |
 | **Il pre-processing è critico** | Senza correzione tilt e filtraggio, i risultati PCA sarebbero degradati |
-
