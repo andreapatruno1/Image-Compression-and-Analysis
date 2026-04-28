@@ -275,7 +275,6 @@ def run_classification(
 
     best = max(results, key=lambda s: results[s]["accuracy"][0])
     best_acc = results[best]["accuracy"][0]
-    print(f"\n  >> Miglior scenario: {best}  (Accuracy = {best_acc*100:.1f}%)")
     print("=" * 100)
 
     return results
